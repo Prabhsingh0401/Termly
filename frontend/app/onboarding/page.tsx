@@ -59,7 +59,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Step card */}
-      <div className="glass-card p-8 w-full max-w-md animate-[fadeIn_200ms_ease]">
+      <div className="glass-card p-8 w-full max-w-4xl animate-[fadeIn_200ms_ease]">
         {/* Step 1 — Create Org */}
         {step === 0 && (
           <>
