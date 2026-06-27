@@ -35,7 +35,7 @@ export function FinalCta() {
             <h2 className="text-balance text-3xl font-semibold tracking-tight text-primary-foreground sm:text-4xl lg:text-5xl">
               Stop Losing Money to Missed Renewals.
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-pretty text-lg text-primary-foreground/80">
+            <p className="mx-auto mt-4 max-w-xl text-pretty text-lg !text-primary-foreground">
               Upload your first contract and let Termly do the tracking.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">

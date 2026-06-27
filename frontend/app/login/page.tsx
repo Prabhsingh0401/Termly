@@ -42,7 +42,7 @@ export default function AuthPage() {
   return (
     <div className="flex min-h-screen">
       {/* Left — dark image panel */}
-      <div className="relative hidden w-1/2 flex-col justify-end overflow-hidden bg-[oklch(0.10_0_0)] p-12 lg:flex">
+      <div className="relative hidden w-1/2 flex-col justify-end overflow-hidden bg-[oklch(0.10_0_0)] dark:bg-background p-12 lg:flex">
         {/* grid overlay */}
         <div
           className="pointer-events-none absolute inset-0 opacity-20"
@@ -56,10 +56,10 @@ export default function AuthPage() {
         <div className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-[120px]" />
         {/* bottom copy */}
         <div className="relative z-10">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary/70">
+          <p className="text-xs font-semibold uppercase tracking-widest text-white dark:text-muted-foreground">
             Termly
           </p>
-          <h2 className="mt-3 text-balance text-4xl font-semibold leading-tight text-foreground">
+          <h2 className="mt-3 text-balance text-4xl font-semibold leading-tight text-white dark:text-muted-foreground">
             Never miss a contract renewal again.
           </h2>
           <p className="mt-4 max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
@@ -208,13 +208,6 @@ export default function AuthPage() {
             >
               {isSignUp ? 'Sign in' : 'Sign up'}
             </button>
-          </p>
-
-          <p className="mt-4 text-center text-xs text-muted-foreground/60">
-            By continuing, you agree to Termly&apos;s{' '}
-            <a href="#" className="underline hover:text-muted-foreground">Terms</a>{' '}
-            and{' '}
-            <a href="#" className="underline hover:text-muted-foreground">Privacy Policy</a>
           </p>
         </div>
       </div>
