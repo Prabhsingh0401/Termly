@@ -1,33 +1,72 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import { DashboardLayout } from '@/app/components/layout/DashboardLayout';
 import { Card } from '@/app/components/ui/Card';
 import { RiskBadge, StatusBadge } from '@/app/components/ui/Badge';
 import { EmptyState } from '@/app/components/ui/EmptyState';
-import { CONTRACTS } from '@/app/lib/dummy-data';
 import { formatCurrency, formatDate, cn } from '@/app/lib/utils';
-import { Search, X, SlidersHorizontal } from 'lucide-react';
+import { Search, X, SlidersHorizontal, Loader2 } from 'lucide-react';
 
 export default function SearchPage() {
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRisk, setFilterRisk] = useState('all');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const results = CONTRACTS.filter((c) => {
-    const q = query.toLowerCase();
-    const matchQ = !q || c.title.toLowerCase().includes(q) || c.vendorName.toLowerCase().includes(q) || c.aiSummary.toLowerCase().includes(q);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    // Let the search run even if query is empty so that default results are loaded and filters work
+    setLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await axios.get('/search?q=' + encodeURIComponent(query));
+        setResults(res.data.data ?? []);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
+  // Client-side filter on top of API results
+  const filtered = results.filter((c) => {
     const matchS = filterStatus === 'all' || c.status === filterStatus;
-    const matchR = filterRisk === 'all' || c.aiRiskScore === filterRisk;
-    return matchQ && matchS && matchR;
+    const matchR = filterRisk === 'all' || c.ai_risk_score === filterRisk;
+    return matchS && matchR;
   });
 
-  function highlight(text: string, q: string) {
+  function highlight(text: string | null | undefined, q: string) {
+    if (!text) return <span />;
     if (!q) return <span>{text}</span>;
-    const parts = text.split(new RegExp(`(${q})`, 'gi'));
-    return <span>{parts.map((p, i) => p.toLowerCase() === q.toLowerCase() ? <mark key={i} className="bg-[var(--text-primary)] text-[var(--bg)] px-0.5 rounded">{p}</mark> : p)}</span>;
+    const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+    return (
+      <span>
+        {parts.map((p, i) =>
+          p.toLowerCase() === q.toLowerCase() ? (
+            <mark key={i} className="bg-[rgba(4,124,88,0.2)] text-[var(--text-primary)] rounded px-0.5">
+              {p}
+            </mark>
+          ) : (
+            p
+          )
+        )}
+      </span>
+    );
   }
+
+  const showEmpty = !loading && filtered.length === 0;
+  const showPrompt = false;
 
   return (
     <DashboardLayout>
@@ -44,7 +83,11 @@ export default function SearchPage() {
             autoFocus
             className="w-full pl-11 pr-20 py-3.5 text-[15px] glass-card border border-[var(--border)] focus:border-[var(--brand)] focus:outline-none rounded-card text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors"
           />
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)] font-mono bg-[var(--surface-deep)] px-2 py-0.5 rounded border border-[var(--border)]">⌘K</span>
+          {loading ? (
+            <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--brand)] animate-spin" />
+          ) : (
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)] font-mono bg-[var(--surface-deep)] px-2 py-0.5 rounded border border-[var(--border)]">⌘K</span>
+          )}
         </div>
       </div>
 
@@ -107,12 +150,21 @@ export default function SearchPage() {
 
         {/* Results */}
         <div className="flex-1">
-          {query === '' && filterStatus === 'all' && filterRisk === 'all' ? (
+          {showPrompt ? (
             <div className="text-center py-16 text-[var(--text-muted)]">
               <Search size={40} className="mx-auto mb-4 opacity-20" />
               <p className="text-sm">Start typing to search contracts, vendors, and clauses</p>
             </div>
-          ) : results.length === 0 ? (
+          ) : loading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="glass-card rounded-card p-4 animate-pulse">
+                  <div className="h-4 bg-[var(--border)] rounded w-1/2 mb-2" />
+                  <div className="h-3 bg-[var(--border)] rounded w-1/3" />
+                </div>
+              ))}
+            </div>
+          ) : showEmpty ? (
             <EmptyState
               title="No contracts match your search"
               description={`No results for "${query}". Try different keywords or adjust your filters.`}
@@ -121,20 +173,22 @@ export default function SearchPage() {
             />
           ) : (
             <div className="space-y-3">
-              <p className="text-xs text-[var(--text-muted)] mb-2">{results.length} result{results.length !== 1 ? 's' : ''}</p>
-              {results.map((c) => (
+              <p className="text-xs text-[var(--text-muted)] mb-2">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</p>
+              {filtered.map((c) => (
                 <Card key={c.id} hoverable onClick={() => router.push(`/contracts/${c.id}`)}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-[var(--text-primary)] truncate">{highlight(c.title, query)}</p>
-                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{highlight(c.vendorName, query)} · Expires {formatDate(c.endDate)}</p>
-                      {query && c.aiSummary.toLowerCase().includes(query.toLowerCase()) && (
-                        <p className="text-xs text-[var(--text-muted)] mt-2 line-clamp-2">{highlight(c.aiSummary, query)}</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                        {highlight(c.vendor_name, query)} · Expires {formatDate(c.end_date)}
+                      </p>
+                      {query && c.ai_summary?.toLowerCase().includes(query.toLowerCase()) && (
+                        <p className="text-xs text-[var(--text-muted)] mt-2 line-clamp-2">{highlight(c.ai_summary, query)}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <StatusBadge status={c.status} />
-                      <RiskBadge risk={c.aiRiskScore} />
+                      <RiskBadge risk={c.ai_risk_score} />
                     </div>
                   </div>
                 </Card>

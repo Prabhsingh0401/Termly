@@ -1,12 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import axios from 'axios';
 import { DashboardLayout } from '@/app/components/layout/DashboardLayout';
 import { Card } from '@/app/components/ui/Card';
 import { Button } from '@/app/components/ui/Button';
 import { RiskBadge, StatusBadge } from '@/app/components/ui/Badge';
 import { EmptyState } from '@/app/components/ui/EmptyState';
-import { CONTRACTS } from '@/app/lib/dummy-data';
 import { formatCurrency, formatDate, cn } from '@/app/lib/utils';
 import { Upload, Filter, Download, ArrowUpDown, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -19,11 +19,23 @@ const RISK_FILTERS = ['all', 'low', 'medium', 'high'];
 
 export default function ContractsPage() {
   const router = useRouter();
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'endDate', dir: 'asc' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRisk, setFilterRisk] = useState('all');
+
+  useEffect(() => {
+    axios
+      .get('/contracts')
+      .then((r) => {
+        setContracts(r.data.data ?? []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
   const handleSort = (key: SortKey) => {
     setSort((prev) => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
@@ -34,17 +46,29 @@ export default function ContractsPage() {
     return sort.dir === 'asc' ? <ChevronUp size={12} className="text-[var(--brand)]" /> : <ChevronDown size={12} className="text-[var(--brand)]" />;
   };
 
-  let filtered = CONTRACTS.filter((c) => {
+  let filtered = contracts.filter((c) => {
     if (filterStatus !== 'all' && c.status !== filterStatus) return false;
-    if (filterRisk !== 'all' && c.aiRiskScore !== filterRisk) return false;
+    const risk = c.aiRiskScore || c.ai_risk_score;
+    if (filterRisk !== 'all' && risk !== filterRisk) return false;
     return true;
   });
 
   filtered = [...filtered].sort((a, b) => {
     const dir = sort.dir === 'asc' ? 1 : -1;
-    if (sort.key === 'value') return (a.value - b.value) * dir;
-    if (sort.key === 'endDate') return (new Date(a.endDate).getTime() - new Date(b.endDate).getTime()) * dir;
-    return a[sort.key].localeCompare(b[sort.key]) * dir;
+    if (sort.key === 'value') return ((parseFloat(a.value) || 0) - (parseFloat(b.value) || 0)) * dir;
+    if (sort.key === 'endDate') {
+      const dateA = new Date(a.endDate || a.end_date || 0).getTime();
+      const dateB = new Date(b.endDate || b.end_date || 0).getTime();
+      return (dateA - dateB) * dir;
+    }
+    const keyMap: Record<string, string> = {
+      vendorName: 'vendor_name',
+      aiRiskScore: 'ai_risk_score',
+    };
+    const mappedKey = keyMap[sort.key] || sort.key;
+    const valA = a[sort.key] ?? a[mappedKey] ?? '';
+    const valB = b[sort.key] ?? b[mappedKey] ?? '';
+    return valA.toString().localeCompare(valB.toString()) * dir;
   });
 
   const toggleSelect = (id: string) => {
@@ -75,7 +99,7 @@ export default function ContractsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="heading text-xl">Contracts</h2>
-          <p className="text-sm text-[var(--text-muted)] mt-0.5">{CONTRACTS.length} total contracts</p>
+          <p className="text-sm text-[var(--text-muted)] mt-0.5">{contracts.length} total contracts</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setDrawerOpen(true)}>
@@ -102,7 +126,13 @@ export default function ContractsPage() {
 
       {/* Table */}
       <Card className="p-0 overflow-hidden">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="p-5 space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-10 animate-pulse bg-[var(--surface-deep)] rounded mb-2" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <EmptyState
             title="No contracts found"
             description="Try adjusting your filters or upload your first contract."
@@ -145,12 +175,12 @@ export default function ContractsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <p className="font-medium text-[var(--text-primary)] truncate max-w-[200px]">{c.title}</p>
-                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{c.vendorName}</p>
+                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{c.vendorName || c.vendor_name}</p>
                     </td>
                     <td className="px-5 py-3 font-medium text-[var(--text-primary)]">{formatCurrency(c.value, c.currency)}</td>
-                    <td className="px-5 py-3 text-[var(--text-muted)] whitespace-nowrap">{formatDate(c.endDate)}</td>
+                    <td className="px-5 py-3 text-[var(--text-muted)] whitespace-nowrap">{formatDate(c.endDate || c.end_date)}</td>
                     <td className="px-5 py-3"><StatusBadge status={c.status} /></td>
-                    <td className="px-5 py-3"><RiskBadge risk={c.aiRiskScore} /></td>
+                    <td className="px-5 py-3"><RiskBadge risk={c.aiRiskScore || c.ai_risk_score} /></td>
                   </tr>
                 ))}
               </tbody>

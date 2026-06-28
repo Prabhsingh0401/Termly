@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Lock, Mail, ChevronLeft, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/app/components/providers/AuthProvider'
 
 const GoogleIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="size-4" aria-hidden="true">
@@ -21,14 +22,24 @@ export default function AuthPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
+  const { login, signup, loading } = useAuth()
   const router = useRouter()
   const isSignUp = mode === 'signup'
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    // Redirect to onboarding
-    router.push('/onboarding')
+    setError(null)
+    try {
+      if (isSignUp) {
+        await signup(email, password, name)
+      } else {
+        await login(email, password)
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during authentication.')
+    }
   }
 
   function switchMode(next: 'signin' | 'signup') {
@@ -37,6 +48,7 @@ export default function AuthPage() {
     setName('')
     setEmail('')
     setPassword('')
+    setError(null)
   }
 
   return (
@@ -93,6 +105,12 @@ export default function AuthPage() {
               ? 'Get started with Termly for free'
               : 'Enter your details to access your account'}
           </p>
+
+          {error && (
+            <div className="mt-4 p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/50">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             {/* Full Name — sign up only */}
@@ -175,9 +193,12 @@ export default function AuthPage() {
             {/* Submit */}
             <Button
               type="submit"
+              disabled={loading}
               className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
             >
-              {isSignUp ? 'Create account' : 'Sign in'}
+              {loading 
+                ? (isSignUp ? 'Creating account...' : 'Signing in...') 
+                : (isSignUp ? 'Create account' : 'Sign in')}
             </Button>
 
             {/* Divider */}

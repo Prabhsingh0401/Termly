@@ -30,18 +30,20 @@ export function Badge({ children, variant = 'default', className }: BadgeProps) 
   );
 }
 
-export function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {
+export function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' | null | undefined }) {
+  const displayRisk = risk || 'low';
   return (
-    <Badge variant={`risk-${risk}` as BadgeProps['variant']}>
-      {risk.charAt(0).toUpperCase() + risk.slice(1)} Risk
+    <Badge variant={`risk-${displayRisk}` as BadgeProps['variant']}>
+      {displayRisk.charAt(0).toUpperCase() + displayRisk.slice(1)} Risk
     </Badge>
   );
 }
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string | null | undefined }) {
+  const displayStatus = status || 'draft';
   return (
-    <Badge variant={status as BadgeProps['variant']}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
+    <Badge variant={displayStatus as BadgeProps['variant']}>
+      {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
     </Badge>
   );
 }

@@ -2,64 +2,178 @@
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import { DashboardLayout } from '@/app/components/layout/DashboardLayout';
 import { Card } from '@/app/components/ui/Card';
 import { Button } from '@/app/components/ui/Button';
 import { Toggle } from '@/app/components/ui/Toggle';
 import { RiskBadge } from '@/app/components/ui/Badge';
 import { cn } from '@/app/lib/utils';
-import { Upload, FileText, CheckCircle2, X } from 'lucide-react';
-
-const DUMMY_EXTRACTED = {
-  title: 'Salesforce CRM Enterprise License — Renewal 2027',
-  vendor: 'Salesforce Inc.',
-  docType: 'Contract',
-  value: '52000',
-  currency: 'USD',
-  startDate: '2027-01-01',
-  endDate: '2028-01-01',
-  noticePeriod: '60',
-  autoRenewal: true,
-  governingLaw: 'California, USA',
-  paymentTerms: 'Annual upfront',
-  billingCycle: 'Annual',
-  riskScore: 'medium' as const,
-  riskJustification: 'Standard SaaS agreement with moderate auto-renewal risk. The 60-day notice period is within acceptable range, however the price escalation clause of up to 6% per year represents a medium financial exposure over the 3-year term.',
-};
+import { Upload, FileText, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 
 type Stage = 'idle' | 'uploading' | 'extracting' | 'done';
+
+interface ExtractedForm {
+  title: string;
+  vendor: string;
+  docType: string;
+  value: string;
+  currency: string;
+  startDate: string;
+  endDate: string;
+  noticePeriod: string;
+  autoRenewal: boolean;
+  governingLaw: string;
+  paymentTerms: string;
+  billingCycle: string;
+  riskScore: 'low' | 'medium' | 'high';
+  riskJustification: string;
+}
+
+const EMPTY_FORM: ExtractedForm = {
+  title: '',
+  vendor: '',
+  docType: '',
+  value: '',
+  currency: 'USD',
+  startDate: '',
+  endDate: '',
+  noticePeriod: '',
+  autoRenewal: false,
+  governingLaw: '',
+  paymentTerms: '',
+  billingCycle: '',
+  riskScore: 'low',
+  riskJustification: '',
+};
 
 export default function UploadPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [stage, setStage] = useState<Stage>('idle');
   const [progress, setProgress] = useState(0);
-  const [form, setForm] = useState(DUMMY_EXTRACTED);
-  const [autoRenewal, setAutoRenewal] = useState(DUMMY_EXTRACTED.autoRenewal);
+  const [form, setForm] = useState<ExtractedForm>(EMPTY_FORM);
+  const [autoRenewal, setAutoRenewal] = useState(false);
+  const [contractId, setContractId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const onDrop = useCallback((accepted: File[]) => {
+  const [s3Uploaded, setS3Uploaded] = useState(false);
+
+  const runExtraction = async (id: string) => {
+    setStage('extracting');
+    setProgress(60);
+    setError(null);
+
+    try {
+      // 1. Trigger AI extraction (awaits completion)
+      const res = await axios.post(`/contracts/${id}/trigger-extraction`);
+      const c = res.data.contract;
+
+      setProgress(99);
+
+      if (c) {
+        setForm({
+          title: c.title || '',
+          vendor: c.vendor_name || '',
+          docType: c.contract_type || '',
+          value: c.value?.toString() || '',
+          currency: c.currency || 'USD',
+          startDate: c.start_date?.slice(0, 10) || '',
+          endDate: c.end_date?.slice(0, 10) || '',
+          noticePeriod: c.notice_period_days?.toString() || '',
+          autoRenewal: c.auto_renewal || false,
+          governingLaw: c.governing_law || '',
+          paymentTerms: c.payment_terms || '',
+          billingCycle: '',
+          riskScore: (c.ai_risk_score as 'low' | 'medium' | 'high') || 'low',
+          riskJustification: c.ai_summary || '',
+        });
+        setAutoRenewal(c.auto_renewal || false);
+        setProgress(100);
+        setStage('done');
+      } else {
+        throw new Error('No data returned from extraction.');
+      }
+    } catch (err: any) {
+      console.error('Extraction error:', err);
+      setError(
+        err.response?.data?.error ||
+        err.message ||
+        'AI Extraction failed. You can retry below.'
+      );
+      setStage('idle');
+    }
+  };
+
+  const onDrop = useCallback(async (accepted: File[]) => {
     if (!accepted[0]) return;
-    setFile(accepted[0]);
+    const droppedFile = accepted[0];
+    setFile(droppedFile);
     setStage('uploading');
     setProgress(0);
+    setError(null);
+    setS3Uploaded(false);
 
-    // Simulate upload + extraction
-    const uploadInterval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 60) { clearInterval(uploadInterval); setStage('extracting'); return 60; }
-        return p + 6;
+    try {
+      // 1. Create contract record + get presigned S3 URL
+      const createRes = await axios.post('/contracts', {
+        title: droppedFile.name.replace('.pdf', ''),
       });
-    }, 120);
+      const { contractId: newContractId, uploadUrl } = createRes.data;
+      setContractId(newContractId);
 
-    setTimeout(() => {
-      const extractInterval = setInterval(() => {
-        setProgress((p) => {
-          if (p >= 100) { clearInterval(extractInterval); setStage('done'); return 100; }
-          return p + 4;
-        });
-      }, 80);
-    }, 1400);
+      // 2. PUT file directly to S3 presigned URL
+      const s3Axios = axios.create();
+      await s3Axios.put(uploadUrl, droppedFile, {
+        headers: { 'Content-Type': 'application/pdf' },
+        onUploadProgress: (e) => {
+          const pct = e.total ? Math.round((e.loaded * 60) / e.total) : 30;
+          setProgress(Math.min(pct, 60));
+        },
+      });
+
+      setS3Uploaded(true);
+
+      // 3. Trigger extraction
+      await runExtraction(newContractId);
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      setError(
+        err.response?.data?.error ||
+        err.message ||
+        'Upload failed. Please try again.'
+      );
+      setStage('idle');
+      setProgress(0);
+    }
   }, []);
+
+  const handleRetry = async () => {
+    if (!contractId) return;
+    await runExtraction(contractId);
+  };
+
+  const handleSave = async () => {
+    if (!contractId) return;
+    try {
+      await axios.patch(`/contracts/${contractId}`, {
+        title: form.title,
+        vendor_name: form.vendor,
+        value: parseFloat(form.value) || null,
+        end_date: form.endDate || null,
+        auto_renewal: autoRenewal,
+        notice_period_days: parseInt(form.noticePeriod) || null,
+        contract_type: form.docType || null,
+        currency: form.currency,
+        ai_risk_score: form.riskScore,
+        ai_summary: form.riskJustification,
+        status: 'pending',
+      });
+      router.push('/contracts');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to save contract.');
+    }
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop, accept: { 'application/pdf': ['.pdf'] }, maxSize: 50 * 1024 * 1024, multiple: false,
@@ -72,6 +186,15 @@ export default function UploadPage() {
           <h2 className="heading text-xl">Upload Document</h2>
           <p className="text-sm text-[var(--text-muted)] mt-0.5">AI extracts all key terms in under 60 seconds</p>
         </div>
+
+        {/* Error banner */}
+        {error && (
+          <div className="mb-4 flex items-center gap-3 p-4 rounded-card bg-red-50 border border-red-200 text-red-700">
+            <AlertTriangle size={16} className="shrink-0" />
+            <p className="text-sm font-medium">{error}</p>
+            <button onClick={() => setError(null)} className="ml-auto"><X size={14} /></button>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-6">
           {/* Left — Drop zone + progress */}
@@ -88,10 +211,31 @@ export default function UploadPage() {
               >
                 <input {...getInputProps()} />
                 {file ? (
-                  <div className="text-center">
+                  <div 
+                    className="text-center"
+                    onClick={(e) => {
+                      if (s3Uploaded && stage === 'idle') {
+                        e.stopPropagation();
+                      }
+                    }}
+                  >
                     <FileText size={40} className="mx-auto mb-3 text-[var(--brand)]" />
                     <p className="font-semibold text-[var(--text-primary)]">{file.name}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                    
+                    {s3Uploaded && stage === 'idle' && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRetry();
+                        }}
+                        className="mt-4"
+                      >
+                        Retry AI Extraction
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center">
@@ -112,14 +256,14 @@ export default function UploadPage() {
                       {stage === 'uploading' ? 'Uploading to S3…' : stage === 'extracting' ? 'AI Extracting clauses…' : '✅ Extraction complete'}
                     </p>
                     <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                      {stage === 'uploading' ? 'Textract OCR processing' : stage === 'extracting' ? 'Claude 3 Sonnet analyzing' : 'Review and save below'}
+                      {stage === 'uploading' ? 'Sending file to secure storage' : stage === 'extracting' ? 'Claude 3 Sonnet analyzing' : 'Review and save below'}
                     </p>
                   </div>
                   <span className="text-sm font-bold text-[var(--brand)]">{progress}%</span>
                 </div>
                 <div className="h-2 rounded-full bg-[var(--surface-deep)] overflow-hidden">
                   <div
-                    className="h-full bg-[var(--brand)] rounded-full transition-all duration-150"
+                    className="h-full bg-[var(--brand)] rounded-full transition-all duration-300"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -158,7 +302,7 @@ export default function UploadPage() {
                   ))}
                   <div className="col-span-2 flex items-center gap-4">
                     <label className="label-muted">Auto-Renewal</label>
-                    <Toggle checked={autoRenewal} onChange={setAutoRenewal} />
+                    <Toggle checked={autoRenewal} onChange={(v) => { setAutoRenewal(v); setForm((f) => ({ ...f, autoRenewal: v })); }} />
                   </div>
                 </div>
               </Card>
@@ -173,10 +317,10 @@ export default function UploadPage() {
               </Card>
 
               <div className="flex gap-3">
-                <Button variant="ghost" onClick={() => { setStage('idle'); setFile(null); setProgress(0); }} className="flex-1">
+                <Button variant="ghost" onClick={() => { setStage('idle'); setFile(null); setProgress(0); setError(null); setContractId(null); setS3Uploaded(false); }} className="flex-1">
                   <X size={14} /> Discard
                 </Button>
-                <Button variant="primary" onClick={() => router.push('/contracts')} className="flex-1">
+                <Button variant="primary" onClick={handleSave} className="flex-1">
                   <CheckCircle2 size={14} /> Save Contract
                 </Button>
               </div>

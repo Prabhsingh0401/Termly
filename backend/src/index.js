@@ -28,14 +28,17 @@ const limiter = rateLimit({
 app.use('/api', limiter);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use('/api/v1/auth',       require('./routes/auth'));
-app.use('/api/v1/contracts',  require('./routes/contracts'));
-app.use('/api/v1/vendors',    require('./routes/vendors'));
-app.use('/api/v1/obligations',require('./routes/obligations'));
-app.use('/api/v1/dashboard',  require('./routes/dashboard'));
-app.use('/api/v1/search',     require('./routes/search'));
-app.use('/api/v1/alerts',     require('./routes/alerts'));
+app.use('/api/v1/auth', require('./routes/auth'));
+app.use('/api/v1/organizations', require('./routes/organizations'));
+app.use('/api/v1/contracts', require('./routes/contracts'));
+app.use('/api/v1/vendors', require('./routes/vendors'));
+app.use('/api/v1/obligations', require('./routes/obligations'));
+app.use('/api/v1/dashboard', require('./routes/dashboard'));
+app.use('/api/v1/search', require('./routes/search'));
+app.use('/api/v1/alerts', require('./routes/alerts'));
 app.use('/api/v1/audit-logs', require('./routes/auditLogs'));
+app.use('/api/v1/settings', require('./routes/settings'));
+app.use('/api/v1/workflows', require('./routes/workflows'));
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {

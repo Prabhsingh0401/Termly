@@ -1,11 +1,11 @@
 'use client';
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import { DashboardLayout } from '@/app/components/layout/DashboardLayout';
 import { Card } from '@/app/components/ui/Card';
 import { RiskBadge, StatusBadge } from '@/app/components/ui/Badge';
 import { Button } from '@/app/components/ui/Button';
-import { VENDORS, CONTRACTS } from '@/app/lib/dummy-data';
 import { formatCurrency, formatDate } from '@/app/lib/utils';
 import { ArrowLeft, Globe, Mail } from 'lucide-react';
 
@@ -15,11 +15,40 @@ export default function VendorProfilePage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
+  const [vendor, setVendor] = useState<any>(null);
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const vendor = VENDORS.find((v) => v.id === id);
-  if (!vendor) return <DashboardLayout><div className="text-center py-20 text-[var(--text-muted)]">Vendor not found.</div></DashboardLayout>;
+  useEffect(() => {
+    axios
+      .get(`/vendors/${id}`)
+      .then((r) => {
+        setVendor(r.data.vendor);
+        setContracts(r.data.contracts ?? []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [id]);
 
-  const contracts = CONTRACTS.filter((c) => c.vendorId === id);
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-4 animate-pulse">
+          <div className="h-8 bg-[var(--surface-deep)] rounded w-1/4" />
+          <div className="h-40 bg-[var(--surface-deep)] rounded" />
+          <div className="h-60 bg-[var(--surface-deep)] rounded" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!vendor) {
+    return (
+      <DashboardLayout>
+        <div className="text-center py-20 text-[var(--text-muted)]">Vendor not found.</div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -38,21 +67,27 @@ export default function VendorProfilePage({ params }: { params: Promise<{ id: st
             <div>
               <h2 className="heading text-xl">{vendor.name}</h2>
               <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                <span className="text-xs bg-[var(--surface-deep)] px-2 py-1 rounded-badge text-[var(--text-muted)] font-medium">{vendor.category}</span>
-                <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]"><Globe size={12} />{vendor.country}</span>
-                <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]"><Mail size={12} />{vendor.contactEmail}</span>
+                {vendor.category && (
+                  <span className="text-xs bg-[var(--surface-deep)] px-2 py-1 rounded-badge text-[var(--text-muted)] font-medium">{vendor.category}</span>
+                )}
+                {vendor.country && (
+                  <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]"><Globe size={12} />{vendor.country}</span>
+                )}
+                {vendor.contact_email && (
+                  <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]"><Mail size={12} />{vendor.contact_email}</span>
+                )}
               </div>
             </div>
           </div>
-          <RiskBadge risk={vendor.riskScore} />
+          <RiskBadge risk={vendor.risk_score} />
         </div>
 
         {/* Aggregate stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-5 border-t border-[var(--border)]">
           {[
-            { label: 'Active Contracts', value: vendor.activeContractCount },
-            { label: 'Total Spend', value: formatCurrency(vendor.totalSpend) },
-            { label: 'Aggregate Risk', value: vendor.riskScore.toUpperCase() },
+            { label: 'Active Contracts', value: vendor.active_contracts ?? 0 },
+            { label: 'Total Spend', value: formatCurrency(vendor.total_spend ?? 0) },
+            { label: 'Aggregate Risk', value: (vendor.risk_score ?? '—').toUpperCase() },
           ].map(({ label, value }) => (
             <div key={label}>
               <p className="label-muted mb-1">{label}</p>
@@ -93,7 +128,11 @@ export default function VendorProfilePage({ params }: { params: Promise<{ id: st
                 </tr>
               </thead>
               <tbody>
-                {contracts.map((c, i) => (
+                {contracts.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-10 text-[var(--text-muted)] text-sm">No contracts linked to this vendor.</td>
+                  </tr>
+                ) : contracts.map((c, i) => (
                   <tr
                     key={c.id}
                     className={`table-row-hover border-b border-[var(--border)] cursor-pointer ${i % 2 === 1 ? 'bg-[var(--surface-deep)]' : ''}`}
@@ -101,9 +140,9 @@ export default function VendorProfilePage({ params }: { params: Promise<{ id: st
                   >
                     <td className="px-5 py-3 font-medium text-[var(--text-primary)] whitespace-nowrap">{c.title}</td>
                     <td className="px-5 py-3 whitespace-nowrap">{formatCurrency(c.value, c.currency)}</td>
-                    <td className="px-5 py-3 text-[var(--text-muted)] whitespace-nowrap">{formatDate(c.endDate)}</td>
+                    <td className="px-5 py-3 text-[var(--text-muted)] whitespace-nowrap">{formatDate(c.end_date ?? c.endDate)}</td>
                     <td className="px-5 py-3"><StatusBadge status={c.status} /></td>
-                    <td className="px-5 py-3"><RiskBadge risk={c.aiRiskScore} /></td>
+                    <td className="px-5 py-3"><RiskBadge risk={c.ai_risk_score ?? c.aiRiskScore} /></td>
                   </tr>
                 ))}
               </tbody>

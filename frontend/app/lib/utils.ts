@@ -15,19 +15,37 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(amount);
 }
 
-export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return format(d, 'MMM d, yyyy');
+export function formatDate(date: string | Date | null | undefined): string {
+  if (!date) return '—';
+  try {
+    const d = typeof date === 'string' ? parseISO(date) : date;
+    if (isNaN(d.getTime())) return '—';
+    return format(d, 'MMM d, yyyy');
+  } catch {
+    return '—';
+  }
 }
 
-export function formatDateShort(date: string | Date): string {
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return format(d, 'dd MMM yy');
+export function formatDateShort(date: string | Date | null | undefined): string {
+  if (!date) return '—';
+  try {
+    const d = typeof date === 'string' ? parseISO(date) : date;
+    if (isNaN(d.getTime())) return '—';
+    return format(d, 'dd MMM yy');
+  } catch {
+    return '—';
+  }
 }
 
-export function daysUntil(date: string | Date): number {
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return differenceInDays(d, new Date());
+export function daysUntil(date: string | Date | null | undefined): number {
+  if (!date) return 0;
+  try {
+    const d = typeof date === 'string' ? parseISO(date) : date;
+    if (isNaN(d.getTime())) return 0;
+    return differenceInDays(d, new Date());
+  } catch {
+    return 0;
+  }
 }
 
 export function getRiskBadgeClass(risk: 'low' | 'medium' | 'high'): string {

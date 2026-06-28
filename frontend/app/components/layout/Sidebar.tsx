@@ -45,16 +45,9 @@ export function Sidebar({ mobileMode = false, onNavigate }: SidebarProps) {
       {/* Logo */}
       {!mobileMode && (
         <div className={cn('flex items-center h-16 flex-shrink-0', collapsed ? 'justify-center px-0' : 'justify-start px-6')}>
-          <div className="flex items-center flex-shrink-0 overflow-hidden">
-            <img 
-              src="/main_logo.png" 
-              alt="Termly" 
-              className={cn(
-                "object-contain mix-blend-darken dark:invert dark:mix-blend-screen transition-all duration-300 origin-left",
-                collapsed ? "w-10" : "w-[140px]"
-              )} 
-            />
-          </div>
+          {!collapsed && (
+            <span className="text-xl font-bold tracking-tighter text-[var(--text-primary)]">termly</span>
+          )}
         </div>
       )}
 

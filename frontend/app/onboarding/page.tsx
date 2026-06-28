@@ -5,6 +5,8 @@ import { useDropzone } from 'react-dropzone';
 import { Button } from '@/app/components/ui/Button';
 import { cn } from '@/app/lib/utils';
 import { Upload, Building2, BarChart3, Check } from 'lucide-react';
+import { useAuth } from '@/app/components/providers/AuthProvider';
+import axios from 'axios';
 
 const PLANS = [
   { id: 'free', name: 'Free', price: '$0/mo', features: ['Up to 5 contracts', '1 user', 'Email alerts'] },
@@ -19,6 +21,9 @@ export default function OnboardingPage() {
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState<'idle' | 'processing' | 'done'>('idle');
+  const { refreshUser } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const onDrop = useCallback((accepted: File[]) => {
     if (!accepted[0]) return;
@@ -68,6 +73,12 @@ export default function OnboardingPage() {
             </div>
             <h1 className="heading text-2xl mb-1">Create your organisation</h1>
             <p className="text-sm text-[var(--text-muted)] mb-6">You can invite team members after setup.</p>
+
+            {error && (
+              <div className="mb-4 p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/50">
+                {error}
+              </div>
+            )}
 
             <div className="mb-5">
               <label className="label-muted block mb-2">Organisation Name</label>
@@ -176,14 +187,35 @@ export default function OnboardingPage() {
         {/* Navigation */}
         <div className="flex justify-between items-center">
           {step > 0 ? (
-            <Button variant="ghost" size="sm" onClick={() => setStep(step - 1)}>Back</Button>
+            <Button variant="ghost" size="sm" disabled={loading} onClick={() => setStep(step - 1)}>Back</Button>
           ) : <div />}
           <Button
             variant="primary"
-            disabled={!canContinue}
-            onClick={() => step < 2 ? setStep(step + 1) : router.push('/dashboard')}
+            disabled={!canContinue || loading}
+            onClick={async () => {
+              if (step === 0) {
+                try {
+                  setLoading(true);
+                  setError(null);
+                  const res = await axios.post('/organizations', { name: orgName, planType: plan });
+                  if (res.data.token) {
+                    localStorage.setItem('termly_token', res.data.token);
+                  }
+                  await refreshUser();
+                  setStep(1);
+                } catch (err: any) {
+                  setError(err.response?.data?.error || 'Failed to create workspace. Please try again.');
+                } finally {
+                  setLoading(false);
+                }
+              } else if (step === 1) {
+                setStep(2);
+              } else {
+                router.push('/dashboard');
+              }
+            }}
           >
-            {step === 2 ? 'Go to Dashboard →' : 'Continue'}
+            {loading ? 'Processing...' : step === 2 ? 'Go to Dashboard →' : 'Continue'}
           </Button>
         </div>
       </div>

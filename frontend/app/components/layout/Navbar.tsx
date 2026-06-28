@@ -6,6 +6,7 @@ import { useTheme } from 'next-themes';
 import { ALERTS } from '@/app/lib/dummy-data';
 import { getInitials } from '@/app/lib/utils';
 import { useState, useRef, useEffect } from 'react';
+import { useAuth } from '@/app/components/providers/AuthProvider';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':     'Dashboard',
@@ -18,9 +19,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/audit-log':     'Audit Log',
 };
 
-const CURRENT_USER = { name: 'Priya Singh', email: 'priya@termly.app' };
-
 export function Navbar() {
+  const { user, logout } = useAuth();
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const [bellOpen, setBellOpen] = useState(false);
@@ -36,6 +36,11 @@ export function Navbar() {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
   const pageTitle = PAGE_TITLES[pathname] ?? 'Termly';
@@ -70,7 +75,13 @@ export function Navbar() {
           className="w-9 h-9 flex items-center justify-center rounded-btn text-[var(--text-muted)] hover:bg-[var(--brand-muted)] hover:text-[var(--brand)] transition-all duration-200 active:scale-90"
           aria-label="Toggle theme"
         >
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          {!mounted ? (
+            <Moon size={18} />
+          ) : theme === 'dark' ? (
+            <Sun size={18} />
+          ) : (
+            <Moon size={18} />
+          )}
         </button>
 
         {/* Bell */}
@@ -119,18 +130,18 @@ export function Navbar() {
         <div className="relative" ref={dropdownRef}>
           <div 
             className="w-8 h-8 rounded-full bg-[var(--brand)] flex items-center justify-center ml-1 cursor-pointer transition-transform duration-200 hover:scale-105 active:scale-95 shadow-sm" 
-            title={CURRENT_USER.name}
+            title={user?.fullName || 'User'}
             onClick={() => { setAvatarOpen(!avatarOpen); setBellOpen(false); }}
           >
-            <span className="text-[var(--surface)] text-xs font-bold">{getInitials(CURRENT_USER.name)}</span>
+            <span className="text-[var(--surface)] text-xs font-bold">{getInitials(user?.fullName || 'User')}</span>
           </div>
 
           {/* Avatar dropdown */}
           {avatarOpen && (
             <div className="absolute right-0 top-full mt-2 w-56 glass-card !bg-white dark:!bg-[#0A0A0A] !backdrop-blur-2xl p-1 overflow-hidden animate-[slideInUp_200ms_ease] z-50">
               <div className="px-3 py-2 mb-1 border-b border-[var(--border)]">
-                <p className="text-sm font-semibold text-[var(--text-primary)] leading-tight">{CURRENT_USER.name}</p>
-                <p className="text-xs text-[var(--text-muted)] truncate">{CURRENT_USER.email}</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)] leading-tight">{user?.fullName || 'User'}</p>
+                <p className="text-xs text-[var(--text-muted)] truncate">{user?.email || ''}</p>
               </div>
               <div className="flex flex-col">
                 <Link 
@@ -140,13 +151,12 @@ export function Navbar() {
                 >
                   Settings
                 </Link>
-                <Link 
-                  href="/onboarding" 
-                  className="px-3 py-2 text-sm font-medium text-risk-high hover:bg-risk-high hover:!text-white rounded-md transition-colors"
-                  onClick={() => setAvatarOpen(false)}
+                <button 
+                  onClick={() => { setAvatarOpen(false); logout(); }}
+                  className="px-3 py-2 text-left text-sm font-medium text-risk-high hover:bg-risk-high hover:!text-white rounded-md transition-colors w-full"
                 >
                   Log out
-                </Link>
+                </button>
               </div>
             </div>
           )}

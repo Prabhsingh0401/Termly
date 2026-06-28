@@ -1,23 +1,25 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/app/components/layout/DashboardLayout';
 import { Card } from '@/app/components/ui/Card';
 import { Toggle } from '@/app/components/ui/Toggle';
-import { ALERTS } from '@/app/lib/dummy-data';
 import { formatDate, cn } from '@/app/lib/utils';
-import { Bell, Mail, MessageSquare, Smartphone, CheckCircle2 } from 'lucide-react';
+import { Bell, CheckCircle2, Loader2 } from 'lucide-react';
+import axios from 'axios';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
-  renewal_90: '90-day renewal alert',
-  renewal_30: '30-day renewal alert',
-  renewal_7:  '7-day renewal alert',
+  renewal_90:     '90-day renewal alert',
+  renewal_30:     '30-day renewal alert',
+  renewal_7:      '7-day renewal alert',
   obligation_due: 'Obligation due',
 };
 
 const ALERT_TYPE_ICONS: Record<string, React.ReactNode> = {
-  renewal_90: <Bell size={14} className="text-[var(--brand)]" />,
-  renewal_30: <Bell size={14} className="text-[var(--risk-medium)]" />,
-  renewal_7:  <Bell size={14} className="text-[var(--risk-high)]" />,
+  renewal_90:     <Bell size={14} className="text-[var(--brand)]" />,
+  renewal_30:     <Bell size={14} className="text-[var(--risk-medium)]" />,
+  renewal_7:      <Bell size={14} className="text-[var(--risk-high)]" />,
   obligation_due: <CheckCircle2 size={14} className="text-[var(--risk-medium)]" />,
 };
 
@@ -31,10 +33,26 @@ const PREFS_INITIAL = {
 export default function NotificationsPage() {
   const [prefs, setPrefs] = useState(PREFS_INITIAL);
   const [activeTab, setActiveTab] = useState<'history' | 'preferences'>('history');
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('termly_token');
+    if (!token) { setLoading(false); return; }
+
+    axios
+      .get(`${API_BASE}/alerts`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => setAlerts(res.data.data ?? []))
+      .catch((err) => console.error('Failed to fetch alerts:', err))
+      .finally(() => setLoading(false));
+  }, []);
 
   const setPref = (type: string, channel: string, val: boolean) => {
     setPrefs((p: any) => ({ ...p, [type]: { ...p[type], [channel]: val } }));
   };
+
+  // Unread = alerts where sent_at is null
+  const unreadCount = alerts.filter((a) => !a.sent_at).length;
 
   return (
     <DashboardLayout>
@@ -48,6 +66,11 @@ export default function NotificationsPage() {
             }`}
           >
             {tab}
+            {tab === 'history' && unreadCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--brand)] text-white text-[10px] font-bold">
+                {unreadCount}
+              </span>
+            )}
             {activeTab === tab && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--brand)] rounded-t" />}
           </button>
         ))}
@@ -55,37 +78,59 @@ export default function NotificationsPage() {
 
       {activeTab === 'history' && (
         <Card className="p-0 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-[var(--border)]">
-              <tr>
-                {['', 'Alert', 'Contract', 'Channel', 'Sent At'].map((h) => (
-                  <th key={h} className="label-muted text-left px-5 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ALERTS.map((alert, i) => (
-                <tr key={alert.id} className={`border-b border-[var(--border)] transition-colors ${i % 2 === 1 ? 'bg-[var(--surface-deep)]' : ''}`}>
-                  <td className="px-5 py-3 w-8">
-                    <div className={cn('w-2 h-2 rounded-full', alert.read ? 'bg-[var(--border)]' : 'bg-[var(--brand)]')} />
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      {ALERT_TYPE_ICONS[alert.alertType]}
-                      <span className="font-medium text-[var(--text-primary)]">{ALERT_TYPE_LABELS[alert.alertType]}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-[var(--text-muted)]">{alert.contractTitle}</td>
-                  <td className="px-5 py-3">
-                    <span className="text-xs bg-[var(--surface-deep)] px-2 py-1 rounded-badge text-[var(--text-muted)] capitalize">{alert.channel.replace('_', '-')}</span>
-                  </td>
-                  <td className="px-5 py-3 text-[var(--text-muted)]">
-                    {alert.sentAt ? formatDate(alert.sentAt) : <span className="text-[var(--risk-medium)]">Pending</span>}
-                  </td>
+          {loading ? (
+            <div className="flex items-center justify-center py-16 gap-2 text-[var(--text-muted)]">
+              <Loader2 size={18} className="animate-spin" />
+              <span className="text-sm">Loading alerts…</span>
+            </div>
+          ) : alerts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-2">
+              <Bell size={32} className="text-[var(--border)]" />
+              <p className="text-sm font-medium text-[var(--text-primary)]">No alerts yet</p>
+              <p className="text-xs text-[var(--text-muted)]">Renewal and obligation alerts will appear here.</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--border)]">
+                <tr>
+                  {['', 'Alert', 'Contract', 'Channel', 'Sent At'].map((h) => (
+                    <th key={h} className="label-muted text-left px-5 py-3">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {alerts.map((alert, i) => (
+                  <tr
+                    key={alert.id}
+                    className={`border-b border-[var(--border)] transition-colors ${i % 2 === 1 ? 'bg-[var(--surface-deep)]' : ''}`}
+                  >
+                    <td className="px-5 py-3 w-8">
+                      <div className={cn('w-2 h-2 rounded-full', alert.sent_at ? 'bg-[var(--border)]' : 'bg-[var(--brand)]')} />
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        {ALERT_TYPE_ICONS[alert.alert_type] ?? <Bell size={14} />}
+                        <span className="font-medium text-[var(--text-primary)]">
+                          {ALERT_TYPE_LABELS[alert.alert_type] ?? alert.alert_type}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-[var(--text-muted)]">{alert.contract_title ?? '—'}</td>
+                    <td className="px-5 py-3">
+                      <span className="text-xs bg-[var(--surface-deep)] px-2 py-1 rounded-badge text-[var(--text-muted)] capitalize">
+                        {alert.channel?.replace('_', '-') ?? '—'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-[var(--text-muted)]">
+                      {alert.sent_at
+                        ? formatDate(alert.sent_at)
+                        : <span className="text-[var(--risk-medium)]">Pending</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Card>
       )}
 
@@ -110,7 +155,7 @@ export default function NotificationsPage() {
                   </div>
                   <div className="flex justify-center"><Toggle checked={channels.email} onChange={(v) => setPref(type, 'email', v)} /></div>
                   <div className="flex justify-center"><Toggle checked={channels.inApp} onChange={(v) => setPref(type, 'inApp', v)} /></div>
-                  <div className="flex justify-center"><Toggle checked={channels.sms} onChange={(v) => setPref(type, 'sms', v)} /></div>
+                  <div className="flex justify-center"><Toggle checked={channels.sms}   onChange={(v) => setPref(type, 'sms',   v)} /></div>
                 </div>
               ))}
             </div>
