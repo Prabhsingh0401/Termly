@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, Suspense } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
@@ -62,7 +62,7 @@ interface UploadJob {
   autoRenewal: boolean;
 }
 
-export default function UploadPage() {
+function UploadPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isBillQuery = searchParams.get('type') === 'bill';
@@ -368,5 +368,13 @@ export default function UploadPage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense fallback={null}>
+      <UploadPageInner />
+    </Suspense>
   );
 }
