@@ -112,4 +112,26 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+// DELETE /:id — Delete vendor from DB
+router.delete('/:id', async (req, res) => {
+  try {
+    const { orgId } = req.user;
+    const { id } = req.params;
+
+    const result = await query(
+      `DELETE FROM vendors
+       WHERE id = $1 AND org_id = $2 RETURNING id`,
+      [id, orgId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+    res.json({ message: 'Vendor deleted successfully', id });
+  } catch (err) {
+    console.error('DELETE /vendors/:id error:', err);
+    res.status(500).json({ error: 'Failed to delete vendor' });
+  }
+});
+
 module.exports = router;

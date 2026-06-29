@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   title: 'Termly | Contract & Vendor Lifecycle Management',
   description: 'AI-powered contract management for modern businesses. Track obligations, get deadline alerts, and view spend analytics.',
   keywords: 'contract management, vendor management, CLM, SaaS, obligations, renewals',
+  icons: {
+    icon: '/tab_logo.png?v=1',
+  },
   openGraph: {
     title: 'Termly',
     description: 'AI-powered contract and vendor lifecycle management',

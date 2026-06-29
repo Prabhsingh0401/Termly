@@ -8,8 +8,9 @@ import { Button } from '@/app/components/ui/Button';
 import { RiskBadge, StatusBadge } from '@/app/components/ui/Badge';
 import { EmptyState } from '@/app/components/ui/EmptyState';
 import { formatCurrency, formatDate, cn } from '@/app/lib/utils';
-import { Upload, Filter, Download, ArrowUpDown, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Upload, Filter, Download, ArrowUpDown, ChevronUp, ChevronDown, X, Trash } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { Toast } from '@/app/components/ui/Toast';
 
 type SortKey = 'vendorName' | 'value' | 'endDate' | 'status' | 'aiRiskScore';
 type SortDir = 'asc' | 'desc';
@@ -26,6 +27,7 @@ export default function ContractsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRisk, setFilterRisk] = useState('all');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     axios
@@ -36,6 +38,75 @@ export default function ContractsPage() {
       })
       .catch(() => setLoading(false));
   }, []);
+
+  const handleExportPDF = async () => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+      
+      // Title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('Termly - Contracts Export', 14, 20);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 28);
+      doc.text(`Total contracts exported: ${selected.size}`, 14, 33);
+      
+      // Divider
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, 37, 196, 37);
+      
+      let y = 46;
+      const selectedContracts = contracts.filter((c) => selected.has(c.id));
+      
+      selectedContracts.forEach((c) => {
+        if (y > 260) {
+          doc.addPage();
+          y = 20;
+        }
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text(c.title || 'Untitled Contract', 14, y);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const vendor = c.vendorName || c.vendor_name || 'N/A';
+        const val = formatCurrency(c.value, c.currency);
+        const expiry = formatDate(c.endDate || c.end_date);
+        const status = (c.status || 'draft').toUpperCase();
+        const risk = (c.aiRiskScore || c.ai_risk_score || 'N/A').toUpperCase();
+        
+        doc.text(`Vendor: ${vendor}  |  Value: ${val}`, 14, y + 5);
+        doc.text(`Expires: ${expiry}  |  Status: ${status}  |  Risk: ${risk}`, 14, y + 10);
+        
+        y += 15;
+        doc.setDrawColor(230, 230, 230);
+        doc.line(14, y, 196, y);
+        y += 7;
+      });
+      
+      doc.save(`termly-contracts-export-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+    }
+  };
+
+  const handleDeleteContracts = async () => {
+    try {
+      await Promise.all(
+        Array.from(selected).map((id) => axios.delete(`/contracts/${id}`))
+      );
+      setContracts((prev) => prev.filter((c) => !selected.has(c.id)));
+      setSelected(new Set());
+      setToast({ message: 'Selected contract(s) deleted successfully.', type: 'success' });
+    } catch (err) {
+      console.error('Failed to delete contracts:', err);
+      setToast({ message: 'Failed to delete selected contract(s).', type: 'error' });
+    }
+  };
 
   const handleSort = (key: SortKey) => {
     setSort((prev) => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
@@ -119,8 +190,8 @@ export default function ContractsPage() {
         {selected.size > 0 && (
           <div className="glass-card p-3 mb-4 flex items-center gap-3 animate-[slideInUp_150ms_ease]">
             <span className="text-sm font-medium text-[var(--brand)]">{selected.size} selected</span>
-            <Button variant="ghost" size="sm"><Download size={13} /> Export</Button>
-            <Button variant="destructive" size="sm">Archive</Button>
+            <Button variant="ghost" size="sm" onClick={handleExportPDF}><Download size={13} className="mr-1.5 inline" /> Export PDF</Button>
+            <Button variant="destructive" size="sm" onClick={handleDeleteContracts}><Trash size={13} className="mr-1.5 inline" /> Delete</Button>
             <button onClick={() => setSelected(new Set())} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
           </div>
         )}
@@ -301,6 +372,7 @@ export default function ContractsPage() {
             </div>
           </>
         )}
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       </div>
     </DashboardLayout>
   );

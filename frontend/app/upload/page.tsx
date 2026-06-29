@@ -77,7 +77,7 @@ function UploadPageInner() {
     updateJob(id, { stage: 'extracting', progress: 60, error: null });
     try {
       const res = await axios.post(`/contracts/${contractId}/trigger-extraction`);
-      const c = res.data.contract;
+      const c = res.data.extracted || res.data.contract;
       updateJob(id, { progress: 99 });
 
       if (c) {
@@ -184,6 +184,7 @@ function UploadPageInner() {
         title: job.form.title,
         vendor_name: job.form.vendor,
         value: parseFloat(job.form.value) || null,
+        start_date: job.form.startDate || null,
         end_date: job.form.endDate || null,
         auto_renewal: job.autoRenewal,
         notice_period_days: parseInt(job.form.noticePeriod) || null,
@@ -264,7 +265,7 @@ function UploadPageInner() {
                       <p className="text-xs text-[var(--text-muted)] truncate">
                         {job.stage === 'idle' ? (job.error ? 'Failed' : 'Waiting in queue...') :
                          job.stage === 'uploading' ? 'Uploading to secure storage…' : 
-                         job.stage === 'extracting' ? 'AI analyzing clauses…' : '✅ Extraction complete'}
+                         job.stage === 'extracting' ? 'AI analyzing clauses…' : 'Extraction complete'}
                       </p>
                     </div>
                     <div className="h-1.5 rounded-full bg-[var(--surface-deep)] overflow-hidden">

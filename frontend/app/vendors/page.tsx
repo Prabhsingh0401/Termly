@@ -7,16 +7,19 @@ import { Card } from '@/app/components/ui/Card';
 import { Button } from '@/app/components/ui/Button';
 import { RiskBadge } from '@/app/components/ui/Badge';
 import { EmptyState } from '@/app/components/ui/EmptyState';
-import { formatCurrency } from '@/app/lib/utils';
-import { Plus, Globe, X, AlertTriangle } from 'lucide-react';
+import { formatCurrency, cn } from '@/app/lib/utils';
+import { Plus, Globe, X, AlertTriangle, Trash } from 'lucide-react';
+import { Toast } from '@/app/components/ui/Toast';
 
 export default function VendorsPage() {
   const router = useRouter();
   const [vendors, setVendors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -38,6 +41,33 @@ export default function VendorsPage() {
         console.error('Failed to fetch vendors:', err);
         setLoading(false);
       });
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === vendors.length) setSelected(new Set());
+    else setSelected(new Set(vendors.map((v) => v.id)));
+  };
+
+  const handleDeleteVendors = async () => {
+    try {
+      await Promise.all(
+        Array.from(selected).map((id) => axios.delete(`/vendors/${id}`))
+      );
+      setVendors((prev) => prev.filter((v) => !selected.has(v.id)));
+      setSelected(new Set());
+      setToast({ message: 'Selected vendor(s) deleted successfully.', type: 'success' });
+    } catch (err) {
+      console.error('Failed to delete vendors:', err);
+      setToast({ message: 'Failed to delete selected vendor(s).', type: 'error' });
+    }
   };
 
   useEffect(() => {
@@ -90,6 +120,15 @@ export default function VendorsPage() {
           </Button>
         </div>
 
+        {/* Bulk actions bar */}
+        {selected.size > 0 && (
+          <div className="glass-card p-3 mb-4 flex items-center gap-3 animate-[slideInUp_150ms_ease]">
+            <span className="text-sm font-medium text-[var(--brand)]">{selected.size} selected</span>
+            <Button variant="destructive" size="sm" onClick={handleDeleteVendors}><Trash size={13} className="mr-1.5 inline" /> Delete</Button>
+            <button onClick={() => setSelected(new Set())} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
+          </div>
+        )}
+
         <Card className="p-0 overflow-hidden">
           {loading ? (
             <div className="p-5 space-y-2">
@@ -111,16 +150,34 @@ export default function VendorsPage() {
                 {vendors.map((v) => (
                   <div
                     key={v.id}
-                    className="p-4 flex flex-col gap-2.5 transition-colors cursor-pointer active:bg-[var(--brand-muted)]"
+                    className={cn(
+                      'p-4 flex flex-col gap-2.5 transition-colors cursor-pointer active:bg-[var(--brand-muted)]',
+                      selected.has(v.id) && 'bg-[var(--brand-muted)]'
+                    )}
                     onClick={() => router.push(`/vendors/${v.id}`)}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-badge bg-[var(--brand-muted)] flex items-center justify-center text-[var(--brand)] font-bold text-xs flex-shrink-0">
-                        {v.name.slice(0, 2).toUpperCase()}
+                    <div className="flex items-start gap-3">
+                      <div
+                        onClick={(e) => { e.stopPropagation(); toggleSelect(v.id); }}
+                        className="pt-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.has(v.id)}
+                          onChange={() => {}}
+                          className="accent-[var(--brand)] w-4 h-4 cursor-pointer"
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-[var(--text-primary)] truncate">{v.name}</p>
-                        <p className="text-xs text-[var(--text-muted)] mt-0.5">{v.category || 'No Category'}</p>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-badge bg-[var(--brand-muted)] flex items-center justify-center text-[var(--brand)] font-bold text-xs flex-shrink-0">
+                            {v.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-[var(--text-primary)] truncate">{v.name}</p>
+                            <p className="text-xs text-[var(--text-muted)] mt-0.5">{v.category || 'No Category'}</p>
+                          </div>
+                        </div>
                       </div>
                       <RiskBadge risk={v.risk_score} />
                     </div>
@@ -147,6 +204,14 @@ export default function VendorsPage() {
                 <table className="w-full text-sm">
                   <thead className="border-b border-[var(--border)]">
                     <tr>
+                      <th className="px-5 py-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selected.size === vendors.length && vendors.length > 0}
+                          onChange={toggleAll}
+                          className="accent-[var(--brand)] w-4 h-4 cursor-pointer"
+                        />
+                      </th>
                       {['Vendor', 'Category', 'Country', 'Risk Score', 'Active Contracts', 'Total Spend'].map((h) => (
                         <th key={h} className="label-muted text-left px-5 py-3 whitespace-nowrap">{h}</th>
                       ))}
@@ -156,9 +221,16 @@ export default function VendorsPage() {
                     {vendors.map((v, i) => (
                       <tr
                         key={v.id}
-                        className={`table-row-hover border-b border-[var(--border)] cursor-pointer transition-colors ${i % 2 === 1 ? 'bg-[var(--surface-deep)]' : ''}`}
+                        className={cn(
+                          'table-row-hover border-b border-[var(--border)] cursor-pointer transition-colors',
+                          i % 2 === 1 && 'bg-[var(--surface-deep)]',
+                          selected.has(v.id) && 'bg-[var(--brand-muted)]'
+                        )}
                         onClick={() => router.push(`/vendors/${v.id}`)}
                       >
+                        <td className="px-5 py-3" onClick={(e) => { e.stopPropagation(); toggleSelect(v.id); }}>
+                          <input type="checkbox" checked={selected.has(v.id)} onChange={() => {}} className="accent-[var(--brand)] w-4 h-4 cursor-pointer" />
+                        </td>
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-badge bg-[var(--brand-muted)] flex items-center justify-center text-[var(--brand)] font-bold text-xs flex-shrink-0">
@@ -297,6 +369,7 @@ export default function VendorsPage() {
             </div>
           </>
         )}
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       </div>
     </DashboardLayout>
   );

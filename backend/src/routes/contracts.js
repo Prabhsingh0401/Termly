@@ -138,7 +138,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
 
     const editableFields = [
-      'title', 'value', 'end_date', 'status', 'auto_renewal',
+      'title', 'value', 'start_date', 'end_date', 'status', 'auto_renewal',
       'notice_period_days', 'contract_type', 'currency',
       'ai_risk_score', 'ai_summary', 'document_type',
     ];
@@ -269,14 +269,14 @@ router.patch('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// ─── DELETE /:id — Soft delete (status → terminated) ─────────────────────────
+// ─── DELETE /:id — Hard delete from DB ─────────────────────────────────────────
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const { orgId } = req.user;
     const { id } = req.params;
 
     const result = await query(
-      `UPDATE contracts SET status = 'terminated', updated_at = NOW()
+      `DELETE FROM contracts
        WHERE id = $1 AND org_id = $2 RETURNING id`,
       [id, orgId]
     );
@@ -285,10 +285,10 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Contract not found.' });
     }
 
-    res.json({ message: 'Contract terminated.', id });
+    res.json({ message: 'Contract deleted successfully.', id });
   } catch (err) {
     console.error('DELETE /contracts/:id error:', err);
-    res.status(500).json({ error: 'Failed to terminate contract.' });
+    res.status(500).json({ error: 'Failed to delete contract.' });
   }
 });
 

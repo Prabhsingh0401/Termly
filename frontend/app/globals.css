@@ -38,6 +38,11 @@
   --glass-backdrop: blur(20px) saturate(180%);
   --navbar-bg: rgba(255, 255, 255, 0.85);
   --sidebar-bg: transparent;
+
+  /* Risk levels */
+  --risk-high: #C0392B;
+  --risk-medium: #D4821A;
+  --risk-low: #047C58;
 }
 
 .dark {
@@ -75,6 +80,11 @@
   --glass-backdrop: blur(20px) saturate(180%);
   --navbar-bg: oklch(0.17 0 0 / 85%);
   --sidebar-bg: oklch(0.13 0 0 / 85%);
+
+  /* Risk levels */
+  --risk-high: #E74C3C;
+  --risk-medium: #F39C12;
+  --risk-low: #2ECC71;
 }
 
 /* ─── Base ───────────────────────────────────────────────────────────────────── */
