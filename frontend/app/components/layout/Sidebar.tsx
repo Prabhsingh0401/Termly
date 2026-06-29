@@ -3,16 +3,18 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/app/lib/utils';
+import { useAuth } from '@/app/components/providers/AuthProvider';
 import {
   LayoutDashboard, FileText, Building2, Upload, Search,
-  CheckSquare, Bell, ScrollText, ChevronLeft, ChevronRight, Settings
+  CheckSquare, Bell, ScrollText, ChevronLeft, ChevronRight, Settings,
+  Receipt
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Contracts', href: '/contracts', icon: FileText },
+  { label: 'Bills', href: '/bills', icon: Receipt },
   { label: 'Vendors', href: '/vendors', icon: Building2 },
-  { label: 'Upload', href: '/upload', icon: Upload },
   { label: 'Search', href: '/search', icon: Search },
   { label: 'Approvals', href: '/approvals', icon: CheckSquare },
   { label: 'Notifications', href: '/notifications', icon: Bell },
@@ -28,6 +30,14 @@ interface SidebarProps {
 export function Sidebar({ mobileMode = false, onNavigate }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const visibleNavItems = NAV_ITEMS.filter(({ label }) => {
+    if (label === 'Approvals' || label === 'Audit Log') {
+      return user?.role === 'admin';
+    }
+    return true;
+  });
 
   return (
     <aside
@@ -54,7 +64,7 @@ export function Sidebar({ mobileMode = false, onNavigate }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 py-4 overflow-y-auto px-3">
         <ul className="space-y-1">
-          {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+          {visibleNavItems.map(({ label, href, icon: Icon }) => {
             const isActive = pathname === href || pathname.startsWith(href + '/');
             return (
               <li key={href}>

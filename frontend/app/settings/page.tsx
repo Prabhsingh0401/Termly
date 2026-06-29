@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/app/components/layout/DashboardLayout';
 import { useAuth } from '@/app/components/providers/AuthProvider';
 import { useTheme } from 'next-themes';
@@ -50,9 +51,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 // ─── Row ─────────────────────────────────────────────────────────────────────
-function Row({ children, last }: { children: React.ReactNode; last?: boolean }) {
+function Row({ children, last, style, onClick }: { children: React.ReactNode; last?: boolean; style?: React.CSSProperties; onClick?: () => void }) {
   return (
     <div
+      onClick={onClick}
       style={{
         borderBottom: last ? 'none' : '1px solid var(--border)',
         padding: '16px 20px',
@@ -60,6 +62,7 @@ function Row({ children, last }: { children: React.ReactNode; last?: boolean }) 
         alignItems: 'center',
         gap: 14,
         minHeight: 64,
+        ...style,
       }}
     >
       {children}
@@ -94,6 +97,7 @@ function InlineInput({ value, onChange, placeholder }: { value: string; onChange
         border: '1.5px solid var(--brand)', outline: 'none',
         background: 'var(--surface-deep)', color: 'var(--text-primary)',
         fontSize: 14,
+        width: '100%',
       }}
     />
   );
@@ -101,10 +105,10 @@ function InlineInput({ value, onChange, placeholder }: { value: string; onChange
 
 // ─── Btn ─────────────────────────────────────────────────────────────────────
 function Btn({
-  onClick, variant = 'ghost', children, disabled, style,
+  onClick, variant = 'ghost', children, disabled, style, type = 'button',
 }: {
   onClick?: () => void; variant?: 'brand' | 'ghost' | 'danger';
-  children: React.ReactNode; disabled?: boolean; style?: React.CSSProperties;
+  children: React.ReactNode; disabled?: boolean; style?: React.CSSProperties; type?: 'button' | 'submit';
 }) {
   const base: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -119,7 +123,7 @@ function Btn({
     danger: { background: 'transparent', color: 'var(--risk-high)', border: '1px solid var(--risk-high)' },
   };
   return (
-    <button onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant], ...style }}>
+    <button type={type} onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant], ...style }}>
       {children}
     </button>
   );
@@ -143,6 +147,7 @@ function Avatar({ name, size = 40 }: { name?: string | null; size?: number }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
+  const router = useRouter();
   const { user, refreshUser } = useAuth();
   const { theme, setTheme } = useTheme();
 
@@ -155,6 +160,16 @@ export default function SettingsPage() {
   const [editingOrg,     setEditingOrg]     = useState(false);
   const [profileName,    setProfileName]    = useState('');
   const [orgName,        setOrgName]        = useState('');
+
+  // Password Edit
+  const [editingPassword, setEditingPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword,     setNewPassword]     = useState('');
+
+  // Plan Edit
+  const [editingPlan,    setEditingPlan]    = useState(false);
+  const [selectedPlan,   setSelectedPlan]   = useState('free');
+
 
   // Invite
   const [inviteEmail, setInviteEmail] = useState('');
@@ -216,6 +231,33 @@ export default function SettingsPage() {
     } finally { setSaving(false); }
   }
 
+  async function savePassword() {
+    if (!currentPassword || !newPassword) { setError('Both current and new password are required.'); return; }
+    setSaving(true); setError(null);
+    try {
+      await axios.post(`${API_BASE}/auth/change-password`, { currentPassword, newPassword }, { headers: authHeaders() });
+      setCurrentPassword('');
+      setNewPassword('');
+      setEditingPassword(false);
+      setSuccessMsg('Password changed successfully.');
+    } catch (e: any) {
+      setError(e.response?.data?.error ?? 'Failed to update password.');
+    } finally { setSaving(false); }
+  }
+
+  async function savePlan() {
+    setSaving(true); setError(null);
+    try {
+      const res = await axios.patch(`${API_BASE}/settings/plan`, { planType: selectedPlan }, { headers: authHeaders() });
+      setOrg(res.data.organization);
+      setEditingPlan(false);
+      setSuccessMsg(`Plan successfully updated to ${PLAN_LABELS[selectedPlan]}.`);
+    } catch (e: any) {
+      setError(e.response?.data?.error ?? 'Failed to update subscription plan.');
+    } finally { setSaving(false); }
+  }
+
+
   async function inviteMember() {
     if (!inviteEmail.includes('@')) { setError('Enter a valid email address'); return; }
     setInviting(true); setError(null);
@@ -245,7 +287,7 @@ export default function SettingsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout>
-      <div className="max-w-3xl mx-auto py-6 animate-in fade-in duration-500">
+      <div className="max-w-3xl mx-auto px-4 py-6 pb-28 md:pb-6 animate-in fade-in duration-500">
 
         {/* Page heading */}
         <div className="mb-8">
@@ -277,24 +319,26 @@ export default function SettingsPage() {
         <Section title="Profile">
           <Row last>
             <Avatar name={displayName} />
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               {editingProfile ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
                   <InlineInput
                     value={profileName}
                     onChange={setProfileName}
                     placeholder="Full name"
                   />
-                  <Btn variant="brand" onClick={saveProfile} disabled={saving || !profileName.trim()}>
-                    {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                    Save
-                  </Btn>
-                  <Btn onClick={() => setEditingProfile(false)}><X size={13} /></Btn>
+                  <div className="flex gap-2 justify-end sm:justify-start">
+                    <Btn variant="brand" onClick={saveProfile} disabled={saving || !profileName.trim()}>
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                      Save
+                    </Btn>
+                    <Btn onClick={() => setEditingProfile(false)}><X size={13} /></Btn>
+                  </div>
                 </div>
               ) : (
                 <>
-                  <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>{displayName}</p>
-                  <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 1 }}>{user?.email}</p>
+                  <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</p>
                 </>
               )}
             </div>
@@ -311,33 +355,79 @@ export default function SettingsPage() {
 
         {/* ── Section 2: Password & Security ────────────────────────────────── */}
         <Section title="Security">
-          <Row last>
-            <IconWrap><Shield size={16} /></IconWrap>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>Password &amp; Security</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 1 }}>Manage your password and 2FA.</p>
+          {editingPassword ? (
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div style={{ flex: 1 }}>
+                  <label className="label-muted block mb-1">Current Password</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="••••••••"
+                    style={{
+                      width: '100%', padding: '7px 10px', borderRadius: 8,
+                      border: '1.5px solid var(--border)', outline: 'none',
+                      background: 'var(--surface-deep)', color: 'var(--text-primary)', fontSize: 13,
+                    }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label className="label-muted block mb-1">New Password</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    style={{
+                      width: '100%', padding: '7px 10px', borderRadius: 8,
+                      border: '1.5px solid var(--border)', outline: 'none',
+                      background: 'var(--surface-deep)', color: 'var(--text-primary)', fontSize: 13,
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+                <Btn onClick={() => { setEditingPassword(false); setCurrentPassword(''); setNewPassword(''); }}>Cancel</Btn>
+                <Btn variant="brand" onClick={savePassword} disabled={saving || !currentPassword || !newPassword}>
+                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                  Change Password
+                </Btn>
+              </div>
             </div>
-            <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          </Row>
+          ) : (
+            <Row last>
+              <IconWrap><Shield size={16} /></IconWrap>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>Password &amp; Security</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 1 }}>Manage your account password.</p>
+              </div>
+              <Btn onClick={() => setEditingPassword(true)} style={{ gap: 5 }}>
+                <Edit2 size={13} /> Update
+              </Btn>
+            </Row>
+          )}
         </Section>
 
         {/* ── Section 3: Organization ───────────────────────────────────────── */}
         <Section title="Organization">
           <Row last>
             <IconWrap><Building2 size={16} /></IconWrap>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               {editingOrg ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
                   <InlineInput value={orgName} onChange={setOrgName} placeholder="Organization name" />
-                  <Btn variant="brand" onClick={saveOrg} disabled={saving || !orgName.trim()}>
-                    {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                    Save
-                  </Btn>
-                  <Btn onClick={() => setEditingOrg(false)}><X size={13} /></Btn>
+                  <div className="flex gap-2 justify-end sm:justify-start">
+                    <Btn variant="brand" onClick={saveOrg} disabled={saving || !orgName.trim()}>
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                      Save
+                    </Btn>
+                    <Btn onClick={() => setEditingOrg(false)}><X size={13} /></Btn>
+                  </div>
                 </div>
               ) : (
                 <>
-                  <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>
+                  <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {org?.name ?? '—'}
                   </p>
                   <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 1 }}>
@@ -346,7 +436,7 @@ export default function SettingsPage() {
                 </>
               )}
             </div>
-            {!editingOrg && (
+            {!editingOrg && user?.role === 'admin' && (
               <Btn onClick={() => { setOrgName(org?.name ?? ''); setEditingOrg(true); }} style={{ gap: 5 }}>
                 <Edit2 size={13} /> Edit
               </Btn>
@@ -356,128 +446,164 @@ export default function SettingsPage() {
 
         {/* ── Section 4: Team Members ───────────────────────────────────────── */}
         <Section title="Team Members">
-          {team.map((member, i) => (
-            <Row key={member.id} last={i === team.length - 1 && true}>
-              <Avatar name={member.full_name ?? member.email} size={34} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {member.full_name ?? member.email}
-                </p>
-                <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {member.email}
-                </p>
-              </div>
-              <span
-                style={{
-                  fontSize: 11, fontWeight: 600, padding: '2px 8px',
-                  borderRadius: 999, flexShrink: 0, textTransform: 'capitalize',
-                  ...(ROLE_STYLES[member.role] ?? ROLE_STYLES.viewer),
-                }}
-              >
-                {member.role}
-              </span>
-              {member.id !== user?.id && (
-                <button
-                  onClick={() => removeMember(member.id)}
-                  title="Remove member"
+          <div className="divide-y divide-[var(--border)]">
+            {team.map((member, i) => (
+              <Row key={member.id} last={i === team.length - 1 && true}>
+                <Avatar name={member.full_name ?? member.email} size={34} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {member.full_name ?? member.email}
+                  </p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {member.email}
+                  </p>
+                </div>
+                <span
                   style={{
-                    display: 'flex', alignItems: 'center', padding: 6, borderRadius: 6,
-                    border: 'none', background: 'transparent', cursor: 'pointer',
-                    color: 'var(--text-muted)', transition: 'color 150ms, background 150ms',
+                    fontSize: 11, fontWeight: 600, padding: '2px 8px',
+                    borderRadius: 999, flexShrink: 0, textTransform: 'capitalize',
+                    ...(ROLE_STYLES[member.role] ?? ROLE_STYLES.viewer),
                   }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--risk-high)'; (e.currentTarget as HTMLElement).style.background = 'rgba(192,57,43,0.08)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </Row>
-          ))}
+                  {member.role}
+                </span>
+                {user?.role === 'admin' && member.id !== user?.id && (
+                  <button
+                    onClick={() => removeMember(member.id)}
+                    title="Remove member"
+                    style={{
+                      display: 'flex', alignItems: 'center', padding: 6, borderRadius: 6,
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      color: 'var(--text-muted)', transition: 'color 150ms, background 150ms',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--risk-high)'; (e.currentTarget as HTMLElement).style.background = 'rgba(192,57,43,0.08)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </Row>
+            ))}
+          </div>
 
           {/* Invite row */}
-          <div
-            style={{
-              borderTop: '1px solid var(--border)',
-              padding: '14px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              flexWrap: 'wrap',
-            }}
-          >
-            <input
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="colleague@company.com"
+          {user?.role === 'admin' && (
+            <div
               style={{
-                flex: '1 1 200px', padding: '7px 10px', borderRadius: 8,
-                border: '1.5px solid var(--border)', outline: 'none',
-                background: 'var(--surface-deep)', color: 'var(--text-primary)', fontSize: 13,
+                borderTop: '1px solid var(--border)',
+                padding: '14px 20px',
               }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = '#047C58')}
-              onBlur={(e)  => (e.currentTarget.style.borderColor = 'var(--border)')}
-              onKeyDown={(e) => { if (e.key === 'Enter') inviteMember(); }}
-            />
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value)}
-              style={{
-                padding: '7px 10px', borderRadius: 8, fontSize: 13,
-                border: '1.5px solid var(--border)',
-                background: 'var(--surface-deep)', color: 'var(--text-primary)', outline: 'none',
-              }}
+              className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
             >
-              <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="viewer">Viewer</option>
-            </select>
-            <Btn
-              variant="brand"
-              onClick={inviteMember}
-              disabled={inviting || !inviteEmail.trim()}
-              style={{ gap: 6 }}
-            >
-              {inviting ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-              Invite
-            </Btn>
-          </div>
+              <input
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="colleague@company.com"
+                style={{
+                  flex: '1 1 auto', padding: '7px 10px', borderRadius: 8,
+                  border: '1.5px solid var(--border)', outline: 'none',
+                  background: 'var(--surface-deep)', color: 'var(--text-primary)', fontSize: 13,
+                  width: '100%',
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#047C58')}
+                onBlur={(e)  => (e.currentTarget.style.borderColor = 'var(--border)')}
+                onKeyDown={(e) => { if (e.key === 'Enter') inviteMember(); }}
+              />
+              <div className="flex gap-2 w-full sm:w-auto">
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '7px 10px', borderRadius: 8, fontSize: 13,
+                    border: '1.5px solid var(--border)',
+                    background: 'var(--surface-deep)', color: 'var(--text-primary)', outline: 'none',
+                  }}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="manager">Manager</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+                <Btn
+                  variant="brand"
+                  onClick={inviteMember}
+                  disabled={inviting || !inviteEmail.trim()}
+                  style={{ gap: 6 }}
+                >
+                  {inviting ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                  Invite
+                </Btn>
+              </div>
+            </div>
+          )}
         </Section>
 
         {/* ── Section 5: Plan & Billing ─────────────────────────────────────── */}
         <Section title="Plan &amp; Billing">
           <Row last>
             <IconWrap><CreditCard size={16} /></IconWrap>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>
-                {org ? (
-                  <>
-                    You are on the{' '}
-                    <span
-                      style={{
-                        display: 'inline-block', padding: '2px 8px', borderRadius: 6,
-                        background: '#047C58', color: '#fff', fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                        marginLeft: 4, verticalAlign: 'middle',
-                      }}
-                    >
-                      {PLAN_LABELS[org.plan_type] ?? org.plan_type}
-                    </span>{' '}
-                    plan
-                  </>
-                ) : '—'}
-              </p>
-              {org && (
-                <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>
-                  {parseInt(org.seats_used, 10)} of {org.seats_limit} seats used
-                </p>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {editingPlan ? (
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+                  <select
+                    value={selectedPlan}
+                    onChange={(e) => setSelectedPlan(e.target.value)}
+                    style={{
+                      padding: '7px 10px', borderRadius: 8, fontSize: 13,
+                      border: '1.5px solid var(--border)',
+                      background: 'var(--surface-deep)', color: 'var(--text-primary)', outline: 'none',
+                    }}
+                  >
+                    <option value="free">Free ($0/mo)</option>
+                    <option value="pro">Pro ($99/mo)</option>
+                    <option value="enterprise">Enterprise (Custom)</option>
+                  </select>
+                  <div className="flex gap-2 justify-end sm:justify-start">
+                    <Btn variant="brand" onClick={savePlan} disabled={saving}>
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                      Save
+                    </Btn>
+                    <Btn onClick={() => setEditingPlan(false)}><X size={13} /></Btn>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>
+                    {org ? (
+                      <>
+                        You are on the{' '}
+                        <span
+                          style={{
+                            display: 'inline-block', padding: '2px 8px', borderRadius: 6,
+                            background: '#047C58', color: '#fff', fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                            marginLeft: 4, verticalAlign: 'middle',
+                          }}
+                        >
+                          {PLAN_LABELS[org.plan_type] ?? org.plan_type}
+                        </span>{' '}
+                        plan
+                      </>
+                    ) : '—'}
+                  </p>
+                  {org && (
+                    <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>
+                      {parseInt(org.seats_used, 10)} of {org.seats_limit} seats used
+                    </p>
+                  )}
+                </>
               )}
             </div>
-            <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            {!editingPlan && user?.role === 'admin' && (
+              <Btn onClick={() => { setSelectedPlan(org?.plan_type ?? 'free'); setEditingPlan(true); }} style={{ gap: 5 }}>
+                <Edit2 size={13} /> Change Plan
+              </Btn>
+            )}
           </Row>
         </Section>
 
-        {/* ── Section 6: Appearance ─────────────────────────────────────────── */}
+        {/* ── Section 7: Preferences ─────────────────────────────────────────── */}
         <Section title="Preferences">
-          <Row>
+          <Row last={user?.role !== 'admin'}>
             <IconWrap><Moon size={16} /></IconWrap>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>Appearance</p>
@@ -509,14 +635,16 @@ export default function SettingsPage() {
               <div style={{ width: 120, height: 32, borderRadius: 10, background: 'var(--surface-deep)' }} className="animate-pulse" />
             )}
           </Row>
-          <Row last>
-            <IconWrap><Bell size={16} /></IconWrap>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>Notifications</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 1 }}>Choose which alerts you want to receive.</p>
-            </div>
-            <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          </Row>
+          {user?.role === 'admin' && (
+            <Row last style={{ cursor: 'pointer' }} onClick={() => router.push('/notifications?tab=preferences')}>
+              <IconWrap><Bell size={16} /></IconWrap>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>Notifications</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 1 }}>Choose which alerts you want to receive.</p>
+              </div>
+              <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            </Row>
+          )}
         </Section>
 
       </div>

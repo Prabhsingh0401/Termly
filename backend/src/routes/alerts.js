@@ -9,8 +9,8 @@ router.get('/', authMiddleware, async (req, res) => {
       `SELECT a.*, c.title AS contract_title, c.end_date
        FROM alerts a
        JOIN contracts c ON c.id = a.contract_id
-       WHERE c.org_id = $1
-       ORDER BY a.scheduled_for DESC
+       WHERE c.org_id = $1 AND a.sent_at IS NOT NULL
+       ORDER BY a.sent_at DESC
        LIMIT 50`,
       [req.user.orgId]
     );

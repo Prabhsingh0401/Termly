@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Termly — Contract & Vendor Lifecycle Management',
+  title: 'Termly | Contract & Vendor Lifecycle Management',
   description: 'AI-powered contract management for modern businesses. Track obligations, get deadline alerts, and view spend analytics.',
   keywords: 'contract management, vendor management, CLM, SaaS, obligations, renewals',
   openGraph: {

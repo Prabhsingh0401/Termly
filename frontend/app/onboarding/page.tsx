@@ -93,7 +93,7 @@ export default function OnboardingPage() {
 
             <div className="mb-6">
               <label className="label-muted block mb-3">Choose a Plan</label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {PLANS.map((p) => (
                   <button
                     key={p.id}
@@ -168,7 +168,7 @@ export default function OnboardingPage() {
             <h1 className="heading text-2xl mb-1">You're all set, {orgName || 'there'}!</h1>
             <p className="text-sm text-[var(--text-muted)] mb-6">Your dashboard is ready. Here's a preview of what to expect.</p>
             {/* Mini dashboard preview */}
-            <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
               {[
                 { label: 'Active Contracts', value: '5' },
                 { label: 'Total Spend', value: '$356k' },

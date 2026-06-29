@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileText, Upload, Search, Menu, X } from 'lucide-react';
+import { LayoutDashboard, FileText, Search, Menu, X, Receipt } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { useState } from 'react';
 import { Sidebar } from './Sidebar';
@@ -9,8 +9,8 @@ import { Sidebar } from './Sidebar';
 const MOBILE_NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Contracts', href: '/contracts', icon: FileText },
+  { label: 'Bills', href: '/bills', icon: Receipt },
   { label: 'Search', href: '/search', icon: Search },
-  { label: 'Upload', href: '/upload', icon: Upload },
 ];
 
 export function MobileNav() {

@@ -4,6 +4,9 @@ const { query } = require('../db');
 
 // GET /api/v1/audit-logs — Paginated audit log for org
 router.get('/', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Administrator role required.' });
+  }
   try {
     const page  = Math.max(1, parseInt(req.query.page)  || 1);
     const limit = Math.min(100, parseInt(req.query.limit) || 25);

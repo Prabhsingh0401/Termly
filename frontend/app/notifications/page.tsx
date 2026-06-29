@@ -129,7 +129,7 @@ export default function NotificationsPage() {
                     className={`border-b border-[var(--border)] transition-colors ${i % 2 === 1 ? 'bg-[var(--surface-deep)]' : ''}`}
                   >
                     <td className="px-5 py-3 w-8">
-                      <div className={cn('w-2 h-2 rounded-full', alert.sent_at ? 'bg-[var(--border)]' : 'bg-[var(--brand)]')} />
+                      <div className={cn('w-2 h-2 rounded-full', alert.read ? 'bg-[var(--border)]' : 'bg-[var(--brand)]')} />
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
@@ -146,9 +146,7 @@ export default function NotificationsPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3 text-[var(--text-muted)]">
-                      {alert.sent_at
-                        ? formatDate(alert.sent_at)
-                        : <span className="text-[var(--risk-medium)]">Pending</span>}
+                      {formatDate(alert.sent_at)}
                     </td>
                   </tr>
                 ))}

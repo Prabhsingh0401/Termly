@@ -6,6 +6,8 @@ import { Button } from '@/app/components/ui/Button';
 import { formatDate } from '@/app/lib/utils';
 import { Download, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import axios from 'axios';
+import { useAuth } from '@/app/components/providers/AuthProvider';
+import { useRouter } from 'next/navigation';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 const PAGE_LIMIT = 25;
@@ -21,10 +23,18 @@ const ACTION_COLORS: Record<string, string> = {
 };
 
 export default function AuditLogPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [logs, setLogs]     = useState<any[]>([]);
   const [total, setTotal]   = useState(0);
   const [page, setPage]     = useState(1);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!authLoading && user && user.role !== 'admin') {
+      router.push('/dashboard');
+    }
+  }, [user, authLoading, router]);
 
   const fetchLogs = useCallback(async (p: number) => {
     setLoading(true);
@@ -81,96 +91,98 @@ export default function AuditLogPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="heading text-xl">Audit Log</h2>
-          <p className="text-sm text-[var(--text-muted)] mt-0.5">
-            Immutable record of all system and user actions
-            {total > 0 && <span className="ml-2 text-[var(--brand)] font-medium">({total.toLocaleString()} total)</span>}
-          </p>
+      <div className="pb-28 md:pb-6 max-w-6xl mx-auto px-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 className="heading text-xl">Audit Log</h2>
+            <p className="text-sm text-[var(--text-muted)] mt-0.5">
+              Immutable record of all system and user actions
+              {total > 0 && <span className="ml-2 text-[var(--brand)] font-medium">({total.toLocaleString()} total)</span>}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={exportCSV} disabled={logs.length === 0} className="w-full sm:w-auto justify-center">
+            <Download size={13} /> Export CSV
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={exportCSV} disabled={logs.length === 0}>
-          <Download size={13} /> Export CSV
-        </Button>
-      </div>
 
-      <Card className="p-0 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-[var(--text-muted)]">
-            <Loader2 size={18} className="animate-spin" />
-            <span className="text-sm">Loading audit log…</span>
-          </div>
-        ) : logs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-2">
-            <p className="text-sm font-medium text-[var(--text-primary)]">No audit events yet</p>
-            <p className="text-xs text-[var(--text-muted)]">Actions taken by your team will appear here.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full" style={{ fontSize: 13 }}>
-              <thead className="border-b border-[var(--border)]">
-                <tr>
-                  {['Timestamp', 'User', 'Action', 'Entity', 'Old Value', 'New Value'].map((h) => (
-                    <th key={h} className="label-muted text-left px-5 py-3 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log, i) => (
-                  <tr
-                    key={log.id}
-                    className={`border-b border-[var(--border)] ${i % 2 === 1 ? 'bg-[var(--surface-deep)]' : ''}`}
-                  >
-                    <td className="px-5 py-3 text-[var(--text-muted)] font-mono whitespace-nowrap">
-                      {new Date(log.created_at).toISOString().replace('T', ' ').slice(0, 19)}
-                    </td>
-                    <td className="px-5 py-3 text-[var(--text-primary)] whitespace-nowrap">
-                      {log.user_name ?? log.user_email ?? <span className="text-[var(--text-muted)] italic">system</span>}
-                    </td>
-                    <td className={`px-5 py-3 font-semibold whitespace-nowrap ${ACTION_COLORS[log.action] ?? 'text-[var(--text-primary)]'}`}>
-                      {log.action}
-                    </td>
-                    <td className="px-5 py-3 text-[var(--text-muted)] max-w-[160px] truncate">
-                      {log.entity_type}{log.entity_id ? `: ${log.entity_id.slice(0, 8)}…` : ''}
-                    </td>
-                    <td className="px-5 py-3 text-xs text-[var(--text-muted)] max-w-[200px] truncate">
-                      {formatValue(log.old_value)}
-                    </td>
-                    <td className="px-5 py-3 text-xs text-[var(--text-muted)] max-w-[200px] truncate">
-                      {formatValue(log.new_value)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {!loading && totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border)]">
-            <span className="text-xs text-[var(--text-muted)]">
-              Page {page} of {totalPages} · {total.toLocaleString()} events
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => fetchLogs(page - 1)}
-                disabled={page <= 1}
-                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-deep)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                onClick={() => fetchLogs(page + 1)}
-                disabled={page >= totalPages}
-                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-deep)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronRight size={16} />
-              </button>
+        <Card className="p-0 overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 gap-2 text-[var(--text-muted)]">
+              <Loader2 size={18} className="animate-spin" />
+              <span className="text-sm">Loading audit log…</span>
             </div>
-          </div>
-        )}
-      </Card>
+          ) : logs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-2">
+              <p className="text-sm font-medium text-[var(--text-primary)]">No audit events yet</p>
+              <p className="text-xs text-[var(--text-muted)]">Actions taken by your team will appear here.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full" style={{ fontSize: 13 }}>
+                <thead className="border-b border-[var(--border)]">
+                  <tr>
+                    {['Timestamp', 'User', 'Action', 'Entity', 'Old Value', 'New Value'].map((h) => (
+                      <th key={h} className="label-muted text-left px-5 py-3 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log, i) => (
+                    <tr
+                      key={log.id}
+                      className={`border-b border-[var(--border)] ${i % 2 === 1 ? 'bg-[var(--surface-deep)]' : ''}`}
+                    >
+                      <td className="px-5 py-3 text-[var(--text-muted)] font-mono whitespace-nowrap">
+                        {new Date(log.created_at).toISOString().replace('T', ' ').slice(0, 19)}
+                      </td>
+                      <td className="px-5 py-3 text-[var(--text-primary)] whitespace-nowrap">
+                        {log.user_name ?? log.user_email ?? <span className="text-[var(--text-muted)] italic">system</span>}
+                      </td>
+                      <td className={`px-5 py-3 font-semibold whitespace-nowrap ${ACTION_COLORS[log.action] ?? 'text-[var(--text-primary)]'}`}>
+                        {log.action}
+                      </td>
+                      <td className="px-5 py-3 text-[var(--text-muted)] max-w-[160px] truncate">
+                        {log.entity_type}{log.entity_id ? `: ${log.entity_id.slice(0, 8)}…` : ''}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-[var(--text-muted)] max-w-[200px] truncate">
+                        {formatValue(log.old_value)}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-[var(--text-muted)] max-w-[200px] truncate">
+                        {formatValue(log.new_value)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!loading && totalPages > 1 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border)]">
+              <span className="text-xs text-[var(--text-muted)]">
+                Page {page} of {totalPages} · {total.toLocaleString()} events
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => fetchLogs(page - 1)}
+                  disabled={page <= 1}
+                  className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-deep)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={() => fetchLogs(page + 1)}
+                  disabled={page >= totalPages}
+                  className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-deep)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
     </DashboardLayout>
   );
 }

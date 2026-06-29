@@ -25,6 +25,9 @@ router.get('/organization', authMiddleware, async (req, res) => {
 
 // PATCH /api/v1/settings/organization — Update org name
 router.patch('/organization', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+  }
   try {
     const { name } = req.body;
     if (!name || !name.trim()) {
@@ -79,6 +82,9 @@ router.get('/team', authMiddleware, async (req, res) => {
 
 // POST /api/v1/settings/invite — Invite a new team member
 router.post('/invite', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+  }
   try {
     const { email, role } = req.body;
     const validRoles = ['admin', 'manager', 'viewer'];
@@ -113,6 +119,9 @@ router.post('/invite', authMiddleware, async (req, res) => {
 
 // DELETE /api/v1/settings/team/:userId — Remove team member
 router.delete('/team/:userId', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+  }
   try {
     const { userId } = req.params;
 
@@ -154,6 +163,9 @@ router.get('/notifications', authMiddleware, async (req, res) => {
 
 // PATCH /api/v1/settings/notifications — Save notification preferences
 router.patch('/notifications', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+  }
   try {
     const { preferences } = req.body;
     if (!preferences) {
@@ -183,4 +195,113 @@ router.patch('/notifications', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/v1/settings/aws — Get AWS configuration
+router.get('/aws', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT settings FROM organizations WHERE id = $1`,
+      [req.user.orgId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+    const settings = rows[0].settings || {};
+    const awsConfig = settings.awsConfig || {
+      accessKeyId: '',
+      secretAccessKey: '',
+      region: '',
+      s3Bucket: '',
+    };
+    // Hide secret access key for security (show only masked)
+    if (awsConfig.secretAccessKey) {
+      awsConfig.secretAccessKey = '••••' + awsConfig.secretAccessKey.slice(-4);
+    }
+    res.json({ data: awsConfig });
+  } catch (err) {
+    console.error('GET /settings/aws error:', err);
+    res.status(500).json({ error: 'Failed to fetch AWS settings' });
+  }
+});
+
+// PATCH /api/v1/settings/aws — Save AWS configuration
+router.patch('/aws', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+  }
+  try {
+    const { accessKeyId, secretAccessKey, region, s3Bucket } = req.body;
+
+    const { rows } = await query(
+      `SELECT settings FROM organizations WHERE id = $1`,
+      [req.user.orgId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    const currentSettings = rows[0].settings || {};
+    const prevAwsConfig = currentSettings.awsConfig || {};
+
+    // If secretAccessKey is masked, keep the old one
+    let finalSecret = secretAccessKey;
+    if (secretAccessKey && secretAccessKey.startsWith('••••')) {
+      finalSecret = prevAwsConfig.secretAccessKey;
+    }
+
+    currentSettings.awsConfig = {
+      accessKeyId: accessKeyId || '',
+      secretAccessKey: finalSecret || '',
+      region: region || '',
+      s3Bucket: s3Bucket || '',
+    };
+
+    await query(
+      `UPDATE organizations SET settings = $1 WHERE id = $2`,
+      [JSON.stringify(currentSettings), req.user.orgId]
+    );
+
+    res.json({
+      message: 'AWS settings updated successfully',
+      data: {
+        accessKeyId,
+        region,
+        s3Bucket,
+        secretAccessKey: finalSecret ? '••••' + finalSecret.slice(-4) : '',
+      },
+    });
+  } catch (err) {
+    console.error('PATCH /settings/aws error:', err);
+    res.status(500).json({ error: 'Failed to update AWS settings' });
+  }
+});
+
+// PATCH /api/v1/settings/plan — Update org plan type
+router.patch('/plan', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+  }
+  try {
+    const { planType } = req.body;
+    const validPlans = ['free', 'pro', 'enterprise'];
+    if (!planType || !validPlans.includes(planType)) {
+      return res.status(400).json({ error: `planType must be one of: ${validPlans.join(', ')}` });
+    }
+
+    let seatsLimit = 5;
+    if (planType === 'pro') seatsLimit = 20;
+    else if (planType === 'enterprise') seatsLimit = 100;
+
+    const { rows } = await query(
+      `UPDATE organizations SET plan_type = $1, seats_limit = $2 WHERE id = $3 RETURNING *`,
+      [planType, seatsLimit, req.user.orgId]
+    );
+    res.json({ organization: rows[0] });
+  } catch (err) {
+    console.error('PATCH /settings/plan error:', err);
+    res.status(500).json({ error: 'Failed to update plan' });
+  }
+});
+
 module.exports = router;
+
+

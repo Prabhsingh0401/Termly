@@ -17,9 +17,9 @@ type SortDir = 'asc' | 'desc';
 const STATUS_FILTERS = ['all', 'active', 'expiring', 'draft', 'expired', 'terminated'];
 const RISK_FILTERS = ['all', 'low', 'medium', 'high'];
 
-export default function ContractsPage() {
+export default function BillsPage() {
   const router = useRouter();
-  const [contracts, setContracts] = useState<any[]>([]);
+  const [bills, setBills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'endDate', dir: 'asc' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -29,9 +29,9 @@ export default function ContractsPage() {
 
   useEffect(() => {
     axios
-      .get('/contracts', { params: { document_type: 'contract' } })
+      .get('/contracts', { params: { document_type: 'bill' } })
       .then((r) => {
-        setContracts(r.data.data ?? []);
+        setBills(r.data.data ?? []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -46,7 +46,7 @@ export default function ContractsPage() {
     return sort.dir === 'asc' ? <ChevronUp size={12} className="text-[var(--brand)]" /> : <ChevronDown size={12} className="text-[var(--brand)]" />;
   };
 
-  let filtered = contracts.filter((c) => {
+  let filtered = bills.filter((c) => {
     if (filterStatus !== 'all' && c.status !== filterStatus) return false;
     const risk = c.aiRiskScore || c.ai_risk_score;
     if (filterRisk !== 'all' && risk !== filterRisk) return false;
@@ -99,8 +99,8 @@ export default function ContractsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h2 className="heading text-xl">Contracts</h2>
-            <p className="text-sm text-[var(--text-muted)] mt-0.5">{contracts.length} total contracts</p>
+            <h2 className="heading text-xl">Bills & Invoices</h2>
+            <p className="text-sm text-[var(--text-muted)] mt-0.5">{bills.length} total bills</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <Button variant="outline" size="sm" onClick={() => setDrawerOpen(true)} className="flex-1 sm:flex-initial">
@@ -109,8 +109,8 @@ export default function ContractsPage() {
                 <span className="ml-1.5 w-4 h-4 bg-[var(--brand)] text-white text-[10px] rounded-full flex items-center justify-center inline-flex">!</span>
               )}
             </Button>
-            <Button variant="primary" size="sm" onClick={() => router.push('/upload?type=contract')} className="flex-1 sm:flex-initial">
-              <Upload size={14} className="mr-1.5 inline" /> Upload Contract
+            <Button variant="primary" size="sm" onClick={() => router.push('/upload?type=bill')} className="flex-1 sm:flex-initial">
+              <Upload size={14} className="mr-1.5 inline" /> Upload Bill
             </Button>
           </div>
         </div>
@@ -135,10 +135,10 @@ export default function ContractsPage() {
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState
-              title="No contracts found"
-              description="Try adjusting your filters or upload your first contract."
-              ctaLabel="Upload Contract"
-              onCta={() => router.push('/upload?type=contract')}
+              title="No bills found"
+              description="Try adjusting your filters or upload your first bill/invoice."
+              ctaLabel="Upload Bill"
+              onCta={() => router.push('/upload?type=bill')}
             />
           ) : (
             <>
@@ -151,7 +151,7 @@ export default function ContractsPage() {
                       'p-4 flex flex-col gap-2.5 transition-colors cursor-pointer active:bg-[var(--brand-muted)]',
                       selected.has(c.id) && 'bg-[var(--brand-muted)]'
                     )}
-                    onClick={() => router.push(`/contracts/${c.id}`)}
+                    onClick={() => router.push(`/bills/${c.id}`)}
                   >
                     <div className="flex items-start gap-3">
                       <div
@@ -177,7 +177,7 @@ export default function ContractsPage() {
                           {formatCurrency(c.value, c.currency)}
                         </span>
                         <span className="text-[10px] text-[var(--text-muted)]">
-                          Expires {formatDate(c.endDate || c.end_date)}
+                          Due {formatDate(c.endDate || c.end_date)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -202,9 +202,9 @@ export default function ContractsPage() {
                           className="accent-[var(--brand)] w-4 h-4 cursor-pointer"
                         />
                       </th>
-                      <ColHeader label="Vendor / Contract" sortKey="vendorName" />
+                      <ColHeader label="Vendor / Bill Name" sortKey="vendorName" />
                       <ColHeader label="Value" sortKey="value" />
-                      <ColHeader label="Expiry Date" sortKey="endDate" />
+                      <ColHeader label="Due Date" sortKey="endDate" />
                       <ColHeader label="Status" sortKey="status" />
                       <ColHeader label="Risk Score" sortKey="aiRiskScore" />
                     </tr>
@@ -218,7 +218,7 @@ export default function ContractsPage() {
                           i % 2 === 1 && 'bg-[var(--surface-deep)]',
                           selected.has(c.id) && 'bg-[var(--brand-muted)]',
                         )}
-                        onClick={() => router.push(`/contracts/${c.id}`)}
+                        onClick={() => router.push(`/bills/${c.id}`)}
                       >
                         <td className="px-5 py-3" onClick={(e) => { e.stopPropagation(); toggleSelect(c.id); }}>
                           <input type="checkbox" checked={selected.has(c.id)} onChange={() => {}} className="accent-[var(--brand)] w-4 h-4 cursor-pointer" />

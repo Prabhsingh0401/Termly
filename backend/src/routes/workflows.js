@@ -4,6 +4,9 @@ const authMiddleware = require('../middleware/auth');
 
 // GET / — list pending contracts awaiting approval
 router.get('/', authMiddleware, async (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Administrator role required.' });
+  }
   try {
     const { orgId } = req.user;
 
@@ -25,6 +28,9 @@ router.get('/', authMiddleware, async (req, res, next) => {
 
 // POST /:contractId/approve — approve or reject a pending contract
 router.post('/:contractId/approve', authMiddleware, async (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Administrator role required.' });
+  }
   try {
     const { orgId, id: userId } = req.user;
     const { contractId } = req.params;

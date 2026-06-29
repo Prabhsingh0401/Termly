@@ -1,7 +1,7 @@
 'use client';
 import { Card } from '@/app/components/ui/Card';
 import { Skeleton } from '@/app/components/ui/Skeleton';
-import { formatCurrency } from '@/app/lib/utils';
+import { formatCurrency, cn } from '@/app/lib/utils';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
 interface KPICardProps {
@@ -11,12 +11,13 @@ interface KPICardProps {
   icon: React.ReactNode;
   loading?: boolean;
   accent?: boolean;
+  className?: string;
 }
 
-export function KPICard({ label, value, delta, icon, loading, accent }: KPICardProps) {
+export function KPICard({ label, value, delta, icon, loading, accent, className }: KPICardProps) {
   if (loading) {
     return (
-      <div className="glass-card p-6">
+      <div className={cn("glass-card p-6", className)}>
         <Skeleton className="h-3 w-1/2 mb-4" />
         <Skeleton className="h-8 w-2/3 mb-3" />
         <Skeleton className="h-3 w-1/3" />
@@ -25,7 +26,7 @@ export function KPICard({ label, value, delta, icon, loading, accent }: KPICardP
   }
 
   return (
-    <Card className="glass-card-hover">
+    <Card className={cn("glass-card-hover", className)}>
       <div className="flex items-start justify-between mb-3">
         <p className="label-muted">{label}</p>
         <div className={`w-8 h-8 rounded-badge flex items-center justify-center ${accent ? 'bg-[var(--brand-muted)]' : 'bg-[var(--surface-deep)]'}`}>

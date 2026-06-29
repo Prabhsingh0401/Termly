@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { query } = require('../db');
-const { s3, textract, bedrock } = require('../aws');
+const { s3, textract, bedrock, getClientsForOrg } = require('../aws');
 const authMiddleware = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 
@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { orgId } = req.user;
-    const { status, vendor_id, risk_score, page = 1, limit = 20 } = req.query;
+    const { status, vendor_id, risk_score, document_type, page = 1, limit = 20 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     const conditions = ['c.org_id = $1'];
@@ -26,6 +26,10 @@ router.get('/', authMiddleware, async (req, res) => {
     if (risk_score) {
       conditions.push(`c.ai_risk_score = $${idx++}`);
       values.push(risk_score);
+    }
+    if (document_type) {
+      conditions.push(`c.document_type = $${idx++}`);
+      values.push(document_type);
     }
 
     const where = conditions.join(' AND ');
@@ -61,19 +65,26 @@ router.get('/', authMiddleware, async (req, res) => {
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { orgId, id: userId } = req.user;
-    const { title = 'Untitled Contract', vendor_id } = req.body;
+    const { title = 'Untitled Contract', vendor_id, document_type = 'contract' } = req.body;
 
     const contractId = uuidv4();
     const s3Key = `orgs/${orgId}/contracts/${contractId}.pdf`;
 
     await query(
-      `INSERT INTO contracts (id, org_id, vendor_id, created_by, title, status, s3_key)
-       VALUES ($1, $2, $3, $4, $5, 'draft', $6)`,
-      [contractId, orgId, vendor_id || null, userId, title, s3Key]
+      `INSERT INTO contracts (id, org_id, vendor_id, created_by, title, status, s3_key, document_type)
+       VALUES ($1, $2, $3, $4, $5, 'draft', $6, $7)`,
+      [contractId, orgId, vendor_id || null, userId, title, s3Key, document_type]
     );
 
-    const uploadUrl = await s3.getSignedUrlPromise('putObject', {
-      Bucket: process.env.S3_BUCKET_NAME,
+    const orgResult = await query(
+      `SELECT settings FROM organizations WHERE id = $1`,
+      [orgId]
+    );
+    const orgSettings = orgResult.rows[0]?.settings || {};
+    const clients = getClientsForOrg(orgSettings.awsConfig);
+
+    const uploadUrl = await clients.s3.getSignedUrlPromise('putObject', {
+      Bucket: clients.bucketName,
       Key: s3Key,
       Expires: 900, // 15 minutes
       ContentType: 'application/pdf',
@@ -129,7 +140,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
     const editableFields = [
       'title', 'value', 'end_date', 'status', 'auto_renewal',
       'notice_period_days', 'contract_type', 'currency',
-      'ai_risk_score', 'ai_summary',
+      'ai_risk_score', 'ai_summary', 'document_type',
     ];
 
     const updates = [];
@@ -215,6 +226,42 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       }
     }
 
+    // Send immediate email notification when a contract or bill is saved/finalized (status -> pending)
+    if (req.body.status === 'pending') {
+      try {
+        const { sendEmail } = require('../services/notificationServices');
+        const isBill = updatedContract.document_type === 'bill';
+        
+        // Fetch recipient email
+        const userRes = await query(`SELECT email, full_name FROM users WHERE id = $1`, [req.user.id]);
+        const user = userRes.rows[0];
+        
+        if (user) {
+          const subject = `Termly: New ${isBill ? 'Bill' : 'Contract'} Saved - "${updatedContract.title}"`;
+          const body = `
+            <div style="font-family: 'Inter', Arial, sans-serif; padding: 20px; color: #1E1702; background-color: #E5E3E4;">
+              <div style="background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(20px); border-radius: 16px; padding: 30px; border: 1px solid rgba(142, 136, 107, 0.18); box-shadow: 0 4px 24px rgba(30, 23, 2, 0.07); max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #047C58; margin-top: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">New Document Saved</h2>
+                <p>Hello ${user.full_name},</p>
+                <p>A new ${isBill ? 'bill' : 'contract'} has been successfully processed and saved in your Termly account.</p>
+                <div style="background-color: #F0EEEF; border-radius: 8px; padding: 15px; margin: 20px 0; border-left: 4px solid #047C58;">
+                  <p style="margin: 0 0 5px 0;"><strong>Title:</strong> ${updatedContract.title}</p>
+                  <p style="margin: 0 0 5px 0;"><strong>Value:</strong> ${updatedContract.value ? `${updatedContract.currency} ${updatedContract.value}` : 'N/A'}</p>
+                  <p style="margin: 0;"><strong>Due/Expiry Date:</strong> ${updatedContract.end_date ? new Date(updatedContract.end_date).toLocaleDateString() : 'N/A'}</p>
+                </div>
+                <div style="margin: 25px 0;">
+                  <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/${isBill ? 'bills' : 'contracts'}/${updatedContract.id}" style="background-color: #047C58; color: #FFFFFF; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">View in Termly</a>
+                </div>
+              </div>
+            </div>
+          `;
+          await sendEmail({ to: user.email, subject, body });
+        }
+      } catch (emailErr) {
+        console.error('⚠️ Failed to send creation email notification:', emailErr.message);
+      }
+    }
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error('PATCH /contracts/:id error:', err);
@@ -277,12 +324,14 @@ router.post('/:id/trigger-extraction', authMiddleware, async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Get organization details to dynamically guide the AI to avoid extracting self as vendor
+    // Get organization details to dynamically guide the AI to avoid extracting self as vendor and load settings
     const orgResult = await query(
-      `SELECT name FROM organizations WHERE id = $1`,
+      `SELECT name, settings FROM organizations WHERE id = $1`,
       [orgId]
     );
     const orgName = orgResult.rows[0]?.name || 'Client';
+    const orgSettings = orgResult.rows[0]?.settings || {};
+    const clients = getClientsForOrg(orgSettings.awsConfig);
 
     // 1. Get s3_key from DB
     const contractResult = await query(
@@ -297,10 +346,10 @@ router.post('/:id/trigger-extraction', authMiddleware, async (req, res) => {
     const { s3_key } = contractResult.rows[0];
 
     // 2. Textract — Start asynchronous text detection for PDF
-    const startRes = await textract.startDocumentTextDetection({
+    const startRes = await clients.textract.startDocumentTextDetection({
       DocumentLocation: {
         S3Object: {
-          Bucket: process.env.S3_BUCKET_NAME,
+          Bucket: clients.bucketName,
           Name: s3_key,
         },
       },
@@ -313,7 +362,7 @@ router.post('/:id/trigger-extraction', authMiddleware, async (req, res) => {
     // Poll Textract job status
     while (jobStatus === 'IN_PROGRESS') {
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      textractResult = await textract.getDocumentTextDetection({ JobId: jobId }).promise();
+      textractResult = await clients.textract.getDocumentTextDetection({ JobId: jobId }).promise();
       jobStatus = textractResult.JobStatus;
     }
 
@@ -326,7 +375,7 @@ router.post('/:id/trigger-extraction', authMiddleware, async (req, res) => {
     let nextToken = textractResult.NextToken;
 
     while (nextToken) {
-      const nextResult = await textract.getDocumentTextDetection({ JobId: jobId, NextToken: nextToken }).promise();
+      const nextResult = await clients.textract.getDocumentTextDetection({ JobId: jobId, NextToken: nextToken }).promise();
       blocks.push(...(nextResult.Blocks || []));
       nextToken = nextResult.NextToken;
     }
@@ -338,7 +387,41 @@ router.post('/:id/trigger-extraction', authMiddleware, async (req, res) => {
 
     // 4. Bedrock — Claude 3 Sonnet / Amazon Nova clause extraction
     const modelId = process.env.BEDROCK_MODEL_ID || 'us.anthropic.claude-3-haiku-20240307-v1:0';
-    const promptText = `You are an expert contract analysis assistant. Your task is to analyze the contract text and extract key metadata into a clean JSON structure.
+    const isBill = contractResult.rows[0].document_type === 'bill';
+    const promptText = isBill
+      ? `You are an expert bill/invoice analysis assistant. Your task is to analyze the document text and extract key metadata into a clean JSON structure.
+
+Guidelines for extraction:
+1. **vendor_name**: Identify the biller/merchant who issued the bill or invoice.
+2. **start_date**: Look for invoice date, bill date, or issue date. Format exactly as "YYYY-MM-DD".
+3. **end_date**: Look for payment due date, deadline, or payment date. Format exactly as "YYYY-MM-DD".
+4. **value**: Total amount due or total balance.
+5. **ai_risk_score**: "low" if standard billing/fees, "medium" if unexpected fees or overages are present, "high" if late penalties or billing disputes are highlighted.
+
+Return ONLY valid JSON. No markdown, no backticks, no explanation.
+
+{
+  "title": "Clean descriptive invoice title",
+  "vendor_name": "Name of the Biller/Merchant",
+  "contract_type": "Invoice / Bill / Utility etc.",
+  "value": number or null,
+  "currency": "3-letter ISO currency code",
+  "start_date": "YYYY-MM-DD or null",
+  "end_date": "YYYY-MM-DD or null",
+  "auto_renewal": false,
+  "notice_period_days": null,
+  "governing_law": "state or country",
+  "payment_terms": "Net 15 / Net 30 / Net 60 / Upfront etc.",
+  "billing_cycle": "Monthly / Annual / One-time etc.",
+  "ai_risk_score": "low" or "medium" or "high",
+  "ai_summary": "2-3 sentence summary of the bill details, payment due date, and any notes."
+}
+
+Document text:
+-----------------
+${rawText.slice(0, 90000)}
+-----------------`
+      : `You are an expert contract analysis assistant. Your task is to analyze the contract text and extract key metadata into a clean JSON structure.
 
 Guidelines for extraction:
 1. **vendor_name**: Identify the two parties in this contract. The SERVICE PROVIDER is the company offering the service (the Vendor). The CLIENT is the company receiving the service. Return the SERVICE PROVIDER/Vendor as the vendor_name (the one providing the service). Look at signature blocks, party definitions, and "between X and Y" clauses.
@@ -432,7 +515,7 @@ ${rawText.slice(0, 90000)}
     console.log('🔮 Calling AWS Bedrock with Model:', bedrockPayload.modelId);
     console.log('📦 Bedrock request body payload:', bedrockPayload.body);
 
-    const bedrockResult = await bedrock.invokeModel(bedrockPayload).promise();
+    const bedrockResult = await clients.bedrock.invokeModel(bedrockPayload).promise();
 
     // 5. Parse JSON from bedrock response (supporting both Claude and Nova schemas)
     const responseBody = JSON.parse(bedrockResult.body.toString());
@@ -463,7 +546,30 @@ ${rawText.slice(0, 90000)}
     ) {
       console.log('⚠️ AWS Bedrock access denied. Falling back to local Mock AI extraction to keep development active...');
       try {
-        const mockExtracted = {
+        const finalContractResult = await query(
+          `SELECT c.*, v.name AS vendor_name
+           FROM contracts c
+           LEFT JOIN vendors v ON v.id = c.vendor_id
+           WHERE c.id = $1 AND c.org_id = $2`,
+          [id, orgId]
+        );
+
+        const isBill = finalContractResult.rows[0]?.document_type === 'bill';
+        const mockExtracted = isBill ? {
+          title: 'Google Cloud Platform Invoice',
+          vendor_name: 'Google LLC',
+          contract_type: 'Invoice',
+          value: 1250.00,
+          currency: 'USD',
+          start_date: new Date().toISOString().slice(0, 10),
+          end_date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          auto_renewal: false,
+          notice_period_days: null,
+          governing_law: 'California, USA',
+          payment_terms: 'Net 15',
+          ai_risk_score: 'low',
+          ai_summary: 'Monthly utility invoice for Google Cloud Platform usage. Total due is $1,250.00, due in 15 days.',
+        } : {
           title: 'Salesforce CRM Enterprise Agreement',
           vendor_name: 'Salesforce Inc.',
           contract_type: 'Subscription',
@@ -479,21 +585,13 @@ ${rawText.slice(0, 90000)}
           ai_summary: 'Standard SaaS agreement with Salesforce Inc. Includes auto-renewal clause requiring 60 days written notice to exit.',
         };
 
-        const finalContractResult = await query(
-          `SELECT c.*, v.name AS vendor_name
-           FROM contracts c
-           LEFT JOIN vendors v ON v.id = c.vendor_id
-           WHERE c.id = $1 AND c.org_id = $2`,
-          [id, orgId]
-        );
-
-        // Insert mock obligation
+        // Insert mock obligation (payment due date or renewal date)
         const obligationId = uuidv4();
         await query(
           `INSERT INTO obligations (id, contract_id, type, description, due_date, status)
-           VALUES ($1, $2, 'renewal', $3, $4, 'pending')
+           VALUES ($1, $2, 'payment', $3, $4, 'pending')
            ON CONFLICT DO NOTHING`,
-          [obligationId, id, `Decision due: renew or terminate ${mockExtracted.title}`, mockExtracted.end_date]
+          [obligationId, id, isBill ? `Payment due for ${mockExtracted.title}` : `Decision due: renew or terminate ${mockExtracted.title}`, mockExtracted.end_date]
         );
 
         return res.json({

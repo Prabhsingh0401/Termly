@@ -22,10 +22,8 @@ export function EmptyState({ title, description, ctaLabel, onCta, icon }: EmptyS
           className="mb-6 opacity-40"
           aria-hidden="true"
         >
-          <rect x="10" y="20" width="40" height="50" rx="4" stroke="#8C886B" strokeWidth="2" />
-          <path d="M20 35h20M20 43h14M20 51h10" stroke="#8C886B" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="58" cy="24" r="12" stroke="#8C886B" strokeWidth="2" />
-          <path d="M54 24h8M58 20v8" stroke="#8C886B" strokeWidth="2" strokeLinecap="round" />
+          <rect x="20" y="15" width="40" height="50" rx="4" stroke="#8C886B" strokeWidth="2" />
+          <path d="M30 30h20M30 38h20M30 46h14" stroke="#8C886B" strokeWidth="2" strokeLinecap="round" />
         </svg>
       )}
 

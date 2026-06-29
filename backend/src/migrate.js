@@ -105,6 +105,10 @@ async function migrate() {
       ALTER TABLE alerts ADD COLUMN IF NOT EXISTS read BOOLEAN DEFAULT FALSE;
     `);
 
+    await client.query(`
+      ALTER TABLE contracts ADD COLUMN IF NOT EXISTS document_type VARCHAR(50) DEFAULT 'contract' CHECK (document_type IN ('contract', 'bill'));
+    `);
+
     // 7. Documents
     await client.query(`
       CREATE TABLE IF NOT EXISTS documents (

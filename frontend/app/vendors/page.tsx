@@ -79,183 +79,225 @@ export default function VendorsPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="heading text-xl">Vendors</h2>
-          <p className="text-sm text-[var(--text-muted)] mt-0.5">{vendors.length} vendors tracked</p>
-        </div>
-        <Button variant="primary" size="sm" onClick={() => setIsModalOpen(true)}>
-          <Plus size={14} /> Add Vendor
-        </Button>
-      </div>
-
-      <Card className="p-0 overflow-hidden">
-        {loading ? (
-          <div className="p-5 space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-10 animate-pulse bg-[var(--surface-deep)] rounded mb-2" />
-            ))}
+      <div className="pb-28 md:pb-6 max-w-6xl mx-auto px-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 className="heading text-xl">Vendors</h2>
+            <p className="text-sm text-[var(--text-muted)] mt-0.5">{vendors.length} vendors tracked</p>
           </div>
-        ) : vendors.length === 0 ? (
-          <EmptyState
-            title="No vendors yet"
-            description="Add your first vendor to start tracking contracts and spend."
-            ctaLabel="Add Vendor"
-            onCta={() => setIsModalOpen(true)}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-[var(--border)]">
-                <tr>
-                  {['Vendor', 'Category', 'Country', 'Risk Score', 'Active Contracts', 'Total Spend'].map((h) => (
-                    <th key={h} className="label-muted text-left px-5 py-3 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {vendors.map((v, i) => (
-                  <tr
+          <Button variant="primary" size="sm" onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
+            <Plus size={14} className="mr-1.5 inline" /> Add Vendor
+          </Button>
+        </div>
+
+        <Card className="p-0 overflow-hidden">
+          {loading ? (
+            <div className="p-5 space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-10 animate-pulse bg-[var(--surface-deep)] rounded mb-2" />
+              ))}
+            </div>
+          ) : vendors.length === 0 ? (
+            <EmptyState
+              title="No vendors yet"
+              description="Add your first vendor to start tracking contracts and spend."
+              ctaLabel="Add Vendor"
+              onCta={() => setIsModalOpen(true)}
+            />
+          ) : (
+            <>
+              {/* Mobile Card List View (visible on small screens) */}
+              <div className="block md:hidden divide-y divide-[var(--border)]">
+                {vendors.map((v) => (
+                  <div
                     key={v.id}
-                    className={`table-row-hover border-b border-[var(--border)] cursor-pointer transition-colors ${i % 2 === 1 ? 'bg-[var(--surface-deep)]' : ''}`}
+                    className="p-4 flex flex-col gap-2.5 transition-colors cursor-pointer active:bg-[var(--brand-muted)]"
                     onClick={() => router.push(`/vendors/${v.id}`)}
                   >
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-badge bg-[var(--brand-muted)] flex items-center justify-center text-[var(--brand)] font-bold text-xs flex-shrink-0">
-                          {v.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <p className="font-medium text-[var(--text-primary)]">{v.name}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-badge bg-[var(--brand-muted)] flex items-center justify-center text-[var(--brand)] font-bold text-xs flex-shrink-0">
+                        {v.name.slice(0, 2).toUpperCase()}
                       </div>
-                    </td>
-                    <td className="px-5 py-3 text-[var(--text-muted)]">{v.category || '—'}</td>
-                    <td className="px-5 py-3">
-                      <span className="flex items-center gap-1 text-[var(--text-muted)]">
-                        <Globe size={12} />
-                        {v.country || '—'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-[var(--text-primary)] truncate">{v.name}</p>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">{v.category || 'No Category'}</p>
+                      </div>
                       <RiskBadge risk={v.risk_score} />
-                    </td>
-                    <td className="px-5 py-3 text-[var(--text-primary)] font-medium">{v.active_contract_count ?? 0}</td>
-                    <td className="px-5 py-3 font-medium text-[var(--text-primary)]">{formatCurrency(v.total_spend ?? 0)}</td>
-                  </tr>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-1 pl-11">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-medium text-[var(--text-primary)]">
+                          {v.active_contract_count ?? 0} active contract{v.active_contract_count !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
+                          <Globe size={10} /> {v.country || '—'}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-[var(--brand)]">
+                        {formatCurrency(v.total_spend ?? 0)}
+                      </span>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              {/* Desktop Table View (visible on md screens and above) */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-[var(--border)]">
+                    <tr>
+                      {['Vendor', 'Category', 'Country', 'Risk Score', 'Active Contracts', 'Total Spend'].map((h) => (
+                        <th key={h} className="label-muted text-left px-5 py-3 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vendors.map((v, i) => (
+                      <tr
+                        key={v.id}
+                        className={`table-row-hover border-b border-[var(--border)] cursor-pointer transition-colors ${i % 2 === 1 ? 'bg-[var(--surface-deep)]' : ''}`}
+                        onClick={() => router.push(`/vendors/${v.id}`)}
+                      >
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-badge bg-[var(--brand-muted)] flex items-center justify-center text-[var(--brand)] font-bold text-xs flex-shrink-0">
+                              {v.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <p className="font-medium text-[var(--text-primary)]">{v.name}</p>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3 text-[var(--text-muted)]">{v.category || '—'}</td>
+                        <td className="px-5 py-3">
+                          <span className="flex items-center gap-1 text-[var(--text-muted)]">
+                            <Globe size={12} />
+                            {v.country || '—'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3">
+                          <RiskBadge risk={v.risk_score} />
+                        </td>
+                        <td className="px-5 py-3 text-[var(--text-primary)] font-medium">{v.active_contract_count ?? 0}</td>
+                        <td className="px-5 py-3 font-medium text-[var(--text-primary)]">{formatCurrency(v.total_spend ?? 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </Card>
+
+        {/* Add Vendor Glass Drawer */}
+        {isModalOpen && (
+          <>
+            <div className="modal-backdrop fixed inset-0 z-40 bg-[#1E1702]/45 backdrop-blur-[3px] animate-[fadeIn_200ms_ease]" onClick={() => { setIsModalOpen(false); setError(null); setForm({ name: '', category: '', country: '', contactEmail: '', riskScore: '' }); }} />
+            <div className="fixed right-0 top-0 h-full w-[400px] max-w-[100vw] z-50 glass-card rounded-none rounded-l-[16px] p-6 overflow-y-auto animate-[slideInRight_200ms_ease] border-l border-[var(--border)]">
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setError(null);
+                  setForm({ name: '', category: '', country: '', contactEmail: '', riskScore: '' });
+                }}
+                className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--brand)] transition-colors focus:outline-none"
+                aria-label="Close modal"
+              >
+                <X size={18} />
+              </button>
+
+              <h3 className="heading text-[18px] mb-1">Add New Vendor</h3>
+              <p className="text-xs text-[var(--text-muted)] mb-5">Create a vendor profile to track linked contracts and aggregate spend.</p>
+
+              {error && (
+                <div className="mb-4 flex items-center gap-2 p-3 rounded-badge bg-red-50 border border-red-200 text-red-700">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  <p className="text-xs font-medium">{error}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="label-muted block mb-1">Vendor Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Acme Corp"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label-muted block mb-1">Category</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. SaaS, Consulting"
+                      value={form.category}
+                      onChange={(e) => setForm({ ...form, category: e.target.value })}
+                      className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="label-muted block mb-1">Country</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. United States"
+                      value={form.country}
+                      onChange={(e) => setForm({ ...form, country: e.target.value })}
+                      className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label-muted block mb-1">Contact Email</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. accounting@acme.com"
+                    value={form.contactEmail}
+                    onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
+                    className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="label-muted block mb-1">Initial Risk Score</label>
+                  <select
+                    value={form.riskScore}
+                    onChange={(e) => setForm({ ...form, riskScore: e.target.value })}
+                    className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors appearance-none cursor-pointer"
+                  >
+                    <option value="">Not Rated</option>
+                    <option value="low">Low Risk</option>
+                    <option value="medium">Medium Risk</option>
+                    <option value="high">High Risk</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-[var(--border)]">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setError(null);
+                      setForm({ name: '', category: '', country: '', contactEmail: '', riskScore: '' });
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" loading={submitting} className="flex-1">
+                    Save Vendor
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </>
         )}
-      </Card>
-
-      {/* Add Vendor Glass Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1E1702]/45 backdrop-blur-[3px] animate-[fadeIn_200ms_ease]">
-          <div className="w-full max-w-lg mx-4 glass-card p-6 overflow-hidden animate-[slideInUp_200ms_ease] relative border border-[var(--border)]">
-            <button
-              onClick={() => {
-                setIsModalOpen(false);
-                setError(null);
-                setForm({ name: '', category: '', country: '', contactEmail: '', riskScore: '' });
-              }}
-              className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--brand)] transition-colors focus:outline-none"
-              aria-label="Close modal"
-            >
-              <X size={18} />
-            </button>
-
-            <h3 className="heading text-[18px] mb-1">Add New Vendor</h3>
-            <p className="text-xs text-[var(--text-muted)] mb-5">Create a vendor profile to track linked contracts and aggregate spend.</p>
-
-            {error && (
-              <div className="mb-4 flex items-center gap-2 p-3 rounded-badge bg-red-50 border border-red-200 text-red-700">
-                <AlertTriangle size={14} className="shrink-0" />
-                <p className="text-xs font-medium">{error}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="label-muted block mb-1">Vendor Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Acme Corp"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-muted block mb-1">Category</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. SaaS, Consulting"
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="label-muted block mb-1">Country</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. United States"
-                    value={form.country}
-                    onChange={(e) => setForm({ ...form, country: e.target.value })}
-                    className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label-muted block mb-1">Contact Email</label>
-                <input
-                  type="email"
-                  placeholder="e.g. accounting@acme.com"
-                  value={form.contactEmail}
-                  onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
-                  className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="label-muted block mb-1">Initial Risk Score</label>
-                <select
-                  value={form.riskScore}
-                  onChange={(e) => setForm({ ...form, riskScore: e.target.value })}
-                  className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors appearance-none cursor-pointer"
-                >
-                  <option value="">Not Rated</option>
-                  <option value="low">Low Risk</option>
-                  <option value="medium">Medium Risk</option>
-                  <option value="high">High Risk</option>
-                </select>
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-[var(--border)]">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setError(null);
-                    setForm({ name: '', category: '', country: '', contactEmail: '', riskScore: '' });
-                  }}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" loading={submitting} className="flex-1">
-                  Save Vendor
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      </div>
     </DashboardLayout>
   );
 }

@@ -25,7 +25,8 @@ export function Navbar() {
   const { theme, setTheme } = useTheme();
   const [bellOpen, setBellOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const bellRef = useRef<HTMLDivElement>(null);
+  const avatarRef = useRef<HTMLDivElement>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
 
   const fetchAlerts = () => {
@@ -66,8 +67,10 @@ export function Navbar() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (bellRef.current && !bellRef.current.contains(event.target as Node)) {
         setBellOpen(false);
+      }
+      if (avatarRef.current && !avatarRef.current.contains(event.target as Node)) {
         setAvatarOpen(false);
       }
     }
@@ -81,7 +84,7 @@ export function Navbar() {
   }, []);
 
   const pageTitle = PAGE_TITLES[pathname] ?? 'Termly';
-  const unread = alerts.filter((a) => !a.read && (a.sent_at || a.sentAt)).length;
+  const unread = alerts.filter((a) => !a.read && a.channel === 'in_app').length;
 
   return (
     <header
@@ -122,7 +125,7 @@ export function Navbar() {
         </button>
 
         {/* Bell */}
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative" ref={bellRef}>
           <button
             onClick={() => { setBellOpen(!bellOpen); setAvatarOpen(false); }}
             className="w-9 h-9 flex items-center justify-center rounded-btn text-[var(--text-muted)] hover:bg-[var(--brand-muted)] hover:text-[var(--brand)] transition-all duration-200 active:scale-90"
@@ -151,12 +154,12 @@ export function Navbar() {
                 )}
               </div>
               <ul className="max-h-72 overflow-y-auto divide-y divide-[var(--border)]">
-                {alerts.filter((a) => !a.read && (a.sent_at || a.sentAt)).length === 0 ? (
+                {alerts.filter((a) => !a.read && a.channel === 'in_app').length === 0 ? (
                   <li className="px-4 py-6 text-center text-xs text-[var(--text-muted)]">
                     No new notifications
                   </li>
                 ) : (
-                  alerts.filter((a) => !a.read && (a.sent_at || a.sentAt)).map((alert) => (
+                  alerts.filter((a) => !a.read && a.channel === 'in_app').map((alert) => (
                     <li
                       key={alert.id}
                       onClick={() => markAsRead(alert.id)}
@@ -182,7 +185,7 @@ export function Navbar() {
         </div>
 
         {/* Avatar */}
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative" ref={avatarRef}>
           <div 
             className="w-8 h-8 rounded-full bg-[var(--brand)] flex items-center justify-center ml-1 cursor-pointer transition-transform duration-200 hover:scale-105 active:scale-95 shadow-sm" 
             title={user?.fullName || 'User'}

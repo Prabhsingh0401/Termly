@@ -79,13 +79,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user && !isPublicPath) {
       router.push('/login');
     } else if (user) {
+      const hasOrg = user.orgId || user.org_id;
       if (isPublicPath) {
-        if (!user.orgId) {
+        if (!hasOrg) {
           router.push('/onboarding');
         } else {
           router.push('/dashboard');
         }
-      } else if (pathname !== '/onboarding' && !user.orgId) {
+      } else if (pathname !== '/onboarding' && !hasOrg) {
         router.push('/onboarding');
       }
     }
@@ -96,9 +97,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await axios.post('/auth/login', { email, password });
       localStorage.setItem('termly_token', res.data.token);
-      setUser(res.data.user);
       
-      if (!res.data.user.orgId) {
+      const loggedUser = res.data.user;
+      setUser(loggedUser);
+      
+      const hasOrg = loggedUser?.orgId || loggedUser?.org_id;
+      if (!hasOrg) {
         router.push('/onboarding');
       } else {
         router.push('/dashboard');
@@ -117,8 +121,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await axios.post('/auth/signup', { email, password, fullName });
       localStorage.setItem('termly_token', res.data.token);
-      setUser(res.data.user);
-      router.push('/onboarding');
+      
+      const signedUser = res.data.user;
+      setUser(signedUser);
+      
+      const hasOrg = signedUser?.orgId || signedUser?.org_id;
+      if (!hasOrg) {
+        router.push('/onboarding');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err: any) {
       localStorage.removeItem('termly_token');
       setUser(null);
