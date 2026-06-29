@@ -97,8 +97,12 @@ async function migrate() {
         alert_type VARCHAR(50) NOT NULL CHECK (alert_type IN ('renewal_90', 'renewal_30', 'renewal_7', 'obligation_due')),
         scheduled_for TIMESTAMPTZ NOT NULL,
         sent_at TIMESTAMPTZ,
-        channel VARCHAR(50) NOT NULL CHECK (channel IN ('email', 'sms', 'in_app'))
+        channel VARCHAR(50) NOT NULL CHECK (channel IN ('email', 'sms', 'in_app')),
+        read BOOLEAN DEFAULT FALSE
       );
+    `);
+    await client.query(`
+      ALTER TABLE alerts ADD COLUMN IF NOT EXISTS read BOOLEAN DEFAULT FALSE;
     `);
 
     // 7. Documents

@@ -1,6 +1,6 @@
 'use client';
-import { use, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import axios from 'axios';
 import { DashboardLayout } from '@/app/components/layout/DashboardLayout';
 import { Card } from '@/app/components/ui/Card';
@@ -11,8 +11,9 @@ import { ArrowLeft, Globe, Mail } from 'lucide-react';
 
 const TABS = ['Contracts', 'Billing', 'Compliance Docs', 'Risk History'];
 
-export default function VendorProfilePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function VendorProfilePage() {
+  const params = useParams();
+  const id = params?.id as string;
   const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
   const [vendor, setVendor] = useState<any>(null);

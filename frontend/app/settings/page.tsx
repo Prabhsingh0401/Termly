@@ -240,7 +240,7 @@ export default function SettingsPage() {
     }
   }
 
-  const displayName = user?.fullName ?? user?.full_name ?? user?.name ?? 'Unknown';
+  const displayName = user?.fullName ?? (user as any)?.full_name ?? (user as any)?.name ?? 'Unknown';
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (

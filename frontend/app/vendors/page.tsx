@@ -8,22 +8,74 @@ import { Button } from '@/app/components/ui/Button';
 import { RiskBadge } from '@/app/components/ui/Badge';
 import { EmptyState } from '@/app/components/ui/EmptyState';
 import { formatCurrency } from '@/app/lib/utils';
-import { Plus, Globe } from 'lucide-react';
+import { Plus, Globe, X, AlertTriangle } from 'lucide-react';
 
 export default function VendorsPage() {
   const router = useRouter();
   const [vendors, setVendors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [form, setForm] = useState({
+    name: '',
+    category: '',
+    country: '',
+    contactEmail: '',
+    riskScore: '',
+  });
+
+  const fetchVendors = () => {
+    setLoading(true);
     axios
       .get('/vendors')
       .then((r) => {
         setVendors(r.data.data ?? []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        console.error('Failed to fetch vendors:', err);
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchVendors();
   }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await axios.post('/vendors', {
+        name: form.name.trim(),
+        category: form.category.trim() || null,
+        country: form.country.trim() || null,
+        contact_email: form.contactEmail.trim() || null,
+        risk_score: form.riskScore || null,
+      });
+
+      setIsModalOpen(false);
+      setForm({
+        name: '',
+        category: '',
+        country: '',
+        contactEmail: '',
+        riskScore: '',
+      });
+      fetchVendors();
+    } catch (err: any) {
+      console.error('Failed to create vendor:', err);
+      setError(err.response?.data?.error || 'Failed to save vendor. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -32,7 +84,9 @@ export default function VendorsPage() {
           <h2 className="heading text-xl">Vendors</h2>
           <p className="text-sm text-[var(--text-muted)] mt-0.5">{vendors.length} vendors tracked</p>
         </div>
-        <Button variant="primary" size="sm"><Plus size={14} /> Add Vendor</Button>
+        <Button variant="primary" size="sm" onClick={() => setIsModalOpen(true)}>
+          <Plus size={14} /> Add Vendor
+        </Button>
       </div>
 
       <Card className="p-0 overflow-hidden">
@@ -47,7 +101,7 @@ export default function VendorsPage() {
             title="No vendors yet"
             description="Add your first vendor to start tracking contracts and spend."
             ctaLabel="Add Vendor"
-            onCta={() => {}}
+            onCta={() => setIsModalOpen(true)}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -74,11 +128,16 @@ export default function VendorsPage() {
                         <p className="font-medium text-[var(--text-primary)]">{v.name}</p>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-[var(--text-muted)]">{v.category}</td>
+                    <td className="px-5 py-3 text-[var(--text-muted)]">{v.category || '—'}</td>
                     <td className="px-5 py-3">
-                      <span className="flex items-center gap-1 text-[var(--text-muted)]"><Globe size={12} />{v.country}</span>
+                      <span className="flex items-center gap-1 text-[var(--text-muted)]">
+                        <Globe size={12} />
+                        {v.country || '—'}
+                      </span>
                     </td>
-                    <td className="px-5 py-3"><RiskBadge risk={v.risk_score} /></td>
+                    <td className="px-5 py-3">
+                      <RiskBadge risk={v.risk_score} />
+                    </td>
                     <td className="px-5 py-3 text-[var(--text-primary)] font-medium">{v.active_contract_count ?? 0}</td>
                     <td className="px-5 py-3 font-medium text-[var(--text-primary)]">{formatCurrency(v.total_spend ?? 0)}</td>
                   </tr>
@@ -88,6 +147,115 @@ export default function VendorsPage() {
           </div>
         )}
       </Card>
+
+      {/* Add Vendor Glass Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1E1702]/45 backdrop-blur-[3px] animate-[fadeIn_200ms_ease]">
+          <div className="w-full max-w-lg mx-4 glass-card p-6 overflow-hidden animate-[slideInUp_200ms_ease] relative border border-[var(--border)]">
+            <button
+              onClick={() => {
+                setIsModalOpen(false);
+                setError(null);
+                setForm({ name: '', category: '', country: '', contactEmail: '', riskScore: '' });
+              }}
+              className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--brand)] transition-colors focus:outline-none"
+              aria-label="Close modal"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="heading text-[18px] mb-1">Add New Vendor</h3>
+            <p className="text-xs text-[var(--text-muted)] mb-5">Create a vendor profile to track linked contracts and aggregate spend.</p>
+
+            {error && (
+              <div className="mb-4 flex items-center gap-2 p-3 rounded-badge bg-red-50 border border-red-200 text-red-700">
+                <AlertTriangle size={14} className="shrink-0" />
+                <p className="text-xs font-medium">{error}</p>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="label-muted block mb-1">Vendor Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Acme Corp"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label-muted block mb-1">Category</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. SaaS, Consulting"
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="label-muted block mb-1">Country</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. United States"
+                    value={form.country}
+                    onChange={(e) => setForm({ ...form, country: e.target.value })}
+                    className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label-muted block mb-1">Contact Email</label>
+                <input
+                  type="email"
+                  placeholder="e.g. accounting@acme.com"
+                  value={form.contactEmail}
+                  onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
+                  className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="label-muted block mb-1">Initial Risk Score</label>
+                <select
+                  value={form.riskScore}
+                  onChange={(e) => setForm({ ...form, riskScore: e.target.value })}
+                  className="w-full px-3 py-2 rounded-badge bg-[var(--surface-deep)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand)] transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="">Not Rated</option>
+                  <option value="low">Low Risk</option>
+                  <option value="medium">Medium Risk</option>
+                  <option value="high">High Risk</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-[var(--border)]">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setError(null);
+                    setForm({ name: '', category: '', country: '', contactEmail: '', riskScore: '' });
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" loading={submitting} className="flex-1">
+                  Save Vendor
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

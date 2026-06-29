@@ -45,14 +45,38 @@ export default function NotificationsPage() {
       .then((res) => setAlerts(res.data.data ?? []))
       .catch((err) => console.error('Failed to fetch alerts:', err))
       .finally(() => setLoading(false));
+
+    axios
+      .get(`${API_BASE}/settings/notifications`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => {
+        if (res.data.data) {
+          setPrefs(res.data.data);
+        }
+      })
+      .catch((err) => console.error('Failed to fetch preferences:', err));
   }, []);
 
   const setPref = (type: string, channel: string, val: boolean) => {
-    setPrefs((p: any) => ({ ...p, [type]: { ...p[type], [channel]: val } }));
+    const token = localStorage.getItem('termly_token');
+    if (!token) return;
+
+    const updated = { ...prefs, [type]: { ...(prefs as any)[type], [channel]: val } };
+    setPrefs(updated);
+
+    axios
+      .patch(
+        `${API_BASE}/settings/notifications`,
+        { preferences: updated },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      .catch((err) => {
+        console.error('Failed to save preferences:', err);
+        setPrefs(prefs);
+      });
   };
 
-  // Unread = alerts where sent_at is null
-  const unreadCount = alerts.filter((a) => !a.sent_at).length;
+  // Unread = alerts where read is false
+  const unreadCount = alerts.filter((a) => !a.read).length;
 
   return (
     <DashboardLayout>

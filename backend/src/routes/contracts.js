@@ -180,14 +180,16 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Contract not found.' });
     }
 
+    const updatedContract = result.rows[0];
+
     // If saving the contract (status moving to pending/active) and end_date is provided
     if (req.body.end_date && req.body.status && req.body.status !== 'draft') {
       const obligationId = uuidv4();
       await query(
         `INSERT INTO obligations (id, contract_id, type, description, due_date, status)
-         VALUES ($1, $2, 'renewal', 'AI-extracted renewal obligation', $3, 'pending')
+         VALUES ($1, $2, 'renewal', $3, $4, 'pending')
          ON CONFLICT DO NOTHING`,
-        [obligationId, id, req.body.end_date]
+        [obligationId, id, `Decision due: renew or terminate ${updatedContract.title}`, req.body.end_date]
       );
 
       const endDate = new Date(req.body.end_date);
@@ -489,9 +491,9 @@ ${rawText.slice(0, 90000)}
         const obligationId = uuidv4();
         await query(
           `INSERT INTO obligations (id, contract_id, type, description, due_date, status)
-           VALUES ($1, $2, 'renewal', 'Mock renewal obligation', $3, 'pending')
+           VALUES ($1, $2, 'renewal', $3, $4, 'pending')
            ON CONFLICT DO NOTHING`,
-          [obligationId, id, mockExtracted.end_date]
+          [obligationId, id, `Decision due: renew or terminate ${mockExtracted.title}`, mockExtracted.end_date]
         );
 
         return res.json({

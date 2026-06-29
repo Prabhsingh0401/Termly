@@ -65,28 +65,31 @@ router.get('/stats', authMiddleware, async (req, res) => {
 
       // Spend by contract_type
       query(
-        `SELECT contract_type AS category, COALESCE(SUM(value), 0) AS total
+        `SELECT contract_type AS category, COALESCE(SUM(value), 0) AS amount
          FROM contracts
          WHERE org_id = $1 AND status NOT IN ('terminated')
          GROUP BY contract_type
-         ORDER BY total DESC`,
+         ORDER BY amount DESC`,
         [orgId]
       ),
 
       // Contract status breakdown
       query(
-        `SELECT status, COUNT(*) AS count
+        `SELECT INITCAP(status) AS status, COUNT(*) AS count
          FROM contracts
          WHERE org_id = $1
          GROUP BY status`,
         [orgId]
       ),
 
-      // Recent pending obligations (joined with contract title)
+      // Recent pending obligations (joined with contract title and user name)
       query(
-        `SELECT o.*, c.title AS contract_title
+        `SELECT o.id, o.contract_id AS "contractId", o.type, o.description,
+                o.due_date AS "dueDate", o.status, u.full_name AS "assignedTo",
+                c.title AS "contractTitle"
          FROM obligations o
          JOIN contracts c ON c.id = o.contract_id
+         LEFT JOIN users u ON u.id = o.assigned_to
          WHERE c.org_id = $1 AND o.status = 'pending'
          ORDER BY o.due_date ASC
          LIMIT 8`,
@@ -100,8 +103,14 @@ router.get('/stats', authMiddleware, async (req, res) => {
       expiringIn30: parseInt(exp30Result.rows[0].count),
       expiringIn90: parseInt(exp90Result.rows[0].count),
       upcomingBilling: parseInt(billingResult.rows[0].count),
-      spendByCategory: categoryResult.rows,
-      contractStatusBreakdown: statusResult.rows,
+      spendByCategory: categoryResult.rows.map((r) => ({
+        category: r.category,
+        amount: parseFloat(r.amount),
+      })),
+      contractStatusBreakdown: statusResult.rows.map((r) => ({
+        status: r.status,
+        count: parseInt(r.count),
+      })),
       recentObligations: obligationsResult.rows,
     });
   } catch (err) {

@@ -3,10 +3,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Search, Bell, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { ALERTS } from '@/app/lib/dummy-data';
 import { getInitials } from '@/app/lib/utils';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/app/components/providers/AuthProvider';
+import axios from 'axios';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':     'Dashboard',
@@ -26,6 +26,43 @@ export function Navbar() {
   const [bellOpen, setBellOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+
+  const fetchAlerts = () => {
+    const token = localStorage.getItem('termly_token');
+    if (!token) return;
+    axios.get('/alerts')
+      .then((res) => setAlerts(res.data.data ?? []))
+      .catch((err) => console.error('Navbar failed to fetch alerts:', err));
+  };
+
+  useEffect(() => {
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (bellOpen) {
+      fetchAlerts();
+    }
+  }, [bellOpen]);
+
+  const markAsRead = (alertId: string) => {
+    axios.patch(`/alerts/${alertId}/read`)
+      .then(() => {
+        setAlerts((prev) => prev.map((a) => a.id === alertId ? { ...a, read: true } : a));
+      })
+      .catch((err) => console.error('Failed to mark alert as read:', err));
+  };
+
+  const markAllAsRead = () => {
+    axios.post('/alerts/mark-all-read')
+      .then(() => {
+        setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
+      })
+      .catch((err) => console.error('Failed to mark all alerts as read:', err));
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -44,7 +81,7 @@ export function Navbar() {
   }, []);
 
   const pageTitle = PAGE_TITLES[pathname] ?? 'Termly';
-  const unread = ALERTS.filter((a) => !a.read).length;
+  const unread = alerts.filter((a) => !a.read && (a.sent_at || a.sentAt)).length;
 
   return (
     <header
@@ -102,20 +139,38 @@ export function Navbar() {
           {/* Bell dropdown */}
           {bellOpen && (
             <div className="absolute right-0 top-full mt-2 w-80 glass-card !bg-white dark:!bg-[#0A0A0A] !backdrop-blur-2xl p-0 overflow-hidden animate-[slideInUp_200ms_ease] z-50">
-              <div className="px-4 py-3 border-b border-[var(--border)]">
+              <div className="px-4 py-3 border-b border-[var(--border)] flex justify-between items-center">
                 <p className="text-sm font-semibold text-[var(--text-primary)]">Notifications</p>
+                {unread > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="text-[11px] text-[var(--brand)] hover:underline font-medium"
+                  >
+                    Mark all as read
+                  </button>
+                )}
               </div>
               <ul className="max-h-72 overflow-y-auto divide-y divide-[var(--border)]">
-                {ALERTS.filter((a) => !a.read).map((alert) => (
-                  <li key={alert.id} className="px-4 py-3 hover:bg-[var(--brand-muted)] transition-colors">
-                    <p className="text-xs font-medium text-[var(--text-primary)] leading-snug">
-                      {alert.contractTitle}
-                    </p>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                      {alert.alertType.replace('_', ' ').toUpperCase()} alert
-                    </p>
+                {alerts.filter((a) => !a.read && (a.sent_at || a.sentAt)).length === 0 ? (
+                  <li className="px-4 py-6 text-center text-xs text-[var(--text-muted)]">
+                    No new notifications
                   </li>
-                ))}
+                ) : (
+                  alerts.filter((a) => !a.read && (a.sent_at || a.sentAt)).map((alert) => (
+                    <li
+                      key={alert.id}
+                      onClick={() => markAsRead(alert.id)}
+                      className="px-4 py-3 hover:bg-[var(--brand-muted)] transition-colors cursor-pointer"
+                    >
+                      <p className="text-xs font-medium text-[var(--text-primary)] leading-snug">
+                        {alert.contract_title || alert.contractTitle || 'Contract update'}
+                      </p>
+                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                        {(alert.alert_type || alert.alertType || '').replace('_', ' ').toUpperCase()} alert
+                      </p>
+                    </li>
+                  ))
+                )}
               </ul>
               <div className="px-4 py-2 border-t border-[var(--border)]">
                 <Link href="/notifications" className="text-xs text-[var(--brand)] font-semibold hover:underline" onClick={() => setBellOpen(false)}>

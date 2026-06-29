@@ -59,8 +59,11 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
+const { startAlertScheduler } = require('./services/alertScheduler');
+
 app.listen(PORT, () => {
   console.log(`✅ Termly API running on http://localhost:${PORT}`);
+  startAlertScheduler();
 });
 
 module.exports = app;

@@ -133,4 +133,54 @@ router.delete('/team/:userId', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/v1/settings/notifications — Get notification preferences
+router.get('/notifications', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT settings FROM organizations WHERE id = $1`,
+      [req.user.orgId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+    const settings = rows[0].settings || {};
+    const notificationPrefs = settings.notificationPrefs || null;
+    res.json({ data: notificationPrefs });
+  } catch (err) {
+    console.error('GET /settings/notifications error:', err);
+    res.status(500).json({ error: 'Failed to fetch notification preferences' });
+  }
+});
+
+// PATCH /api/v1/settings/notifications — Save notification preferences
+router.patch('/notifications', authMiddleware, async (req, res) => {
+  try {
+    const { preferences } = req.body;
+    if (!preferences) {
+      return res.status(400).json({ error: 'Preferences are required' });
+    }
+
+    const { rows } = await query(
+      `SELECT settings FROM organizations WHERE id = $1`,
+      [req.user.orgId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    const currentSettings = rows[0].settings || {};
+    currentSettings.notificationPrefs = preferences;
+
+    await query(
+      `UPDATE organizations SET settings = $1 WHERE id = $2`,
+      [JSON.stringify(currentSettings), req.user.orgId]
+    );
+
+    res.json({ message: 'Notification preferences updated successfully', data: preferences });
+  } catch (err) {
+    console.error('PATCH /settings/notifications error:', err);
+    res.status(500).json({ error: 'Failed to update notification preferences' });
+  }
+});
+
 module.exports = router;
